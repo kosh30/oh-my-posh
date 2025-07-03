@@ -17,6 +17,14 @@
           "type": "os"
         },
         {
+          "background": "#ffce7b",
+          "foreground": "#1d1626",
+          "powerline_symbol": "\ue0b0",
+          "style": "powerline",
+          "template": " \uf26c  {{ if .SSHSession }}\ueba9  {{ end }}{{ .UserName }}@{{ .HostName }} ",
+          "type": "session"
+        },
+        {
           "background": "#ef5350",
           "foreground": "#ffeb95",
           "powerline_symbol": "\ue0b0",
