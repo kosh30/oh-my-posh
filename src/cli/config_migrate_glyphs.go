@@ -35,11 +35,10 @@ Migrates the ~/myconfig.omp.json config file's glyphs and writes the result to y
 A backup of the current config can be found at ~/myconfig.omp.json.bak.`,
 	Args: cobra.NoArgs,
 	Run: func(_ *cobra.Command, _ []string) {
-		configFile := config.Path(configFlag)
-		cfg, _ := config.Load(configFile, shell.GENERIC, false)
+		cfg, _ := config.Load(configFlag, shell.GENERIC, false)
 
 		flags := &runtime.Flags{
-			Config: configFile,
+			Config: cfg.Source,
 		}
 
 		env := &runtime.Terminal{}
@@ -47,7 +46,7 @@ A backup of the current config can be found at ~/myconfig.omp.json.bak.`,
 		defer env.Close()
 
 		cfg.MigrateGlyphs = true
-		if len(format) == 0 {
+		if format == "" {
 			format = cfg.Format
 		}
 

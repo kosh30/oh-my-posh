@@ -14,7 +14,6 @@ import (
 )
 
 type Config struct {
-	Cache         cache.Cache    `json:"-" toml:"-" yaml:"-"`
 	Source        Source         `json:"source" toml:"source" yaml:"source"`
 	Interval      cache.Duration `json:"interval" toml:"interval" yaml:"interval"`
 	Latest        string         `json:"-" toml:"-" yaml:"-"`
@@ -59,7 +58,7 @@ func (cfg *Config) FetchLatest() (string, error) {
 }
 
 func (cfg *Config) DownloadAsset(asset string) ([]byte, error) {
-	if len(cfg.Source) == 0 {
+	if cfg.Source == "" {
 		log.Debug("no source specified, defaulting to github")
 		cfg.Source = GitHub
 	}

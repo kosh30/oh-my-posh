@@ -1920,12 +1920,6 @@
                     "description": "Display the local changes or not",
                     "default": true
                   },
-                  "fetch_stash_count": {
-                    "type": "boolean",
-                    "title": "Display Stash Count",
-                    "description": "Display the stash count or not",
-                    "default": false
-                  },
                   "fetch_worktree_count": {
                     "type": "boolean",
                     "title": "Display Worktree Count",
@@ -5467,6 +5461,18 @@
         "prepend"
       ],
       "default": "replace"
+    },
+    "version": {
+      "type": "integer",
+      "title": "Version",
+      "description": "https://ohmyposh.dev/docs/configuration/general",
+      "default": 3
+    },
+    "extends": {
+      "type": "string",
+      "title": "Extends",
+      "description": "https://ohmyposh.dev/docs/configuration/general#extends",
+      "default": ""
     }
   }
 }

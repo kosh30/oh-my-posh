@@ -139,6 +139,8 @@ function _omp_render_tooltip() {
     return
   fi
 
+  setopt local_options no_shwordsplit
+
   # Get the first word of command line as tip.
   local tooltip_command=${${(MS)BUFFER##[[:graph:]]*}%%[[:space:]]*}
 

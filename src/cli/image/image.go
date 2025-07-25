@@ -34,13 +34,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	font_ "github.com/jandedobbeleer/oh-my-posh/src/cli/font"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
-	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
 
 	"github.com/esimov/stackblur-go"
 	"github.com/fogleman/gg"
@@ -68,6 +66,7 @@ const (
 	bc                  = "BC" // for base 16 colors
 	str                 = "STR"
 	url                 = "URL"
+	text                = "TEXT"
 	invertedColor       = "inverted"
 	invertedColorSingle = "invertedsingle"
 	fullColor           = "full"
@@ -114,28 +113,25 @@ type Renderer struct {
 	italic                 font.Face
 	bold                   font.Face
 	regular                font.Face
-	defaultForegroundColor *RGB
+	backgroundColor        *RGB
 	ansiSequenceRegexMap   map[string]string
 	foregroundColor        *RGB
-	backgroundColor        *RGB
 	defaultBackgroundColor *RGB
-	Path                   string
-	AnsiString             string
-	Author                 string
-	shadowBaseColor        string
-	style                  string
-	BgColor                string
-	shadowOffsetX          float64
-	padding                float64
-	margin                 float64
-	factor                 float64
-	shadowOffsetY          float64
-	rows                   int
-	lineSpacing            float64
-	RPromptOffset          int
-	CursorPadding          int
-	columns                int
-	shadowRadius           uint8
+	defaultForegroundColor *RGB
+	Settings
+	Path            string
+	AnsiString      string
+	shadowBaseColor string
+	style           string
+	shadowOffsetX   float64
+	margin          float64
+	factor          float64
+	shadowOffsetY   float64
+	rows            int
+	lineSpacing     float64
+	columns         int
+	padding         float64
+	shadowRadius    uint8
 }
 
 func (ir *Renderer) Init(env runtime.Environment) error {
@@ -146,9 +142,32 @@ func (ir *Renderer) Init(env runtime.Environment) error {
 	font_.SetCache(env.Cache())
 
 	if err := ir.loadFonts(); err != nil {
-		return &ConnectionError{reason: err.Error()}
+		return err
 	}
 
+	ir.initDefaults()
+
+	return nil
+}
+
+func (ir *Renderer) loadFonts() error {
+	if !ir.Fonts.IsValid() {
+		return ir.loadDefaultFonts()
+	}
+
+	fonts, err := ir.Fonts.Load()
+	if err != nil {
+		return err
+	}
+
+	ir.regular = fonts[regular]
+	ir.bold = fonts[bold]
+	ir.italic = fonts[italic]
+
+	return nil
+}
+
+func (ir *Renderer) initDefaults() {
 	ir.defaultForegroundColor = &RGB{255, 255, 255}
 	ir.defaultBackgroundColor = &RGB{21, 21, 21}
 
@@ -165,6 +184,11 @@ func (ir *Renderer) Init(env runtime.Environment) error {
 	ir.shadowOffsetY = ir.factor * 16
 
 	ir.lineSpacing = 1.2
+
+	// Set background color from settings if provided, otherwise use default
+	if ir.BackgroundColor == "" {
+		ir.BackgroundColor = "#151515" // Default dark background
+	}
 
 	ir.ansiSequenceRegexMap = map[string]string{
 		invertedColor:       `^(?P<STR>(\x1b\[38;2;(?P<BG>(\d+;?){3});49m){1}(\x1b\[7m))`,
@@ -190,8 +214,6 @@ func (ir *Renderer) Init(env runtime.Environment) error {
 		consoleTitle:        `^(?P<STR>\x1b\]0;(.+)\007)`,
 		link:                fmt.Sprintf(`^%s`, regex.LINK),
 	}
-
-	return nil
 }
 
 func (ir *Renderer) setOutputPath(config string) {
@@ -199,7 +221,7 @@ func (ir *Renderer) setOutputPath(config string) {
 		return
 	}
 
-	if len(config) == 0 {
+	if config == "" {
 		ir.Path = "prompt.png"
 		return
 	}
@@ -209,14 +231,14 @@ func (ir *Renderer) setOutputPath(config string) {
 	match := regex.FindNamedRegexMatch(`(\.?)(?P<STR>.*)\.(json|yaml|yml|toml|jsonc)`, config)
 	path := strings.TrimRight(match[str], ".omp")
 
-	if len(path) == 0 {
+	if path == "" {
 		path = "prompt"
 	}
 
 	ir.Path = fmt.Sprintf("%s.png", path)
 }
 
-func (ir *Renderer) loadFonts() error {
+func (ir *Renderer) loadDefaultFonts() error {
 	var data []byte
 
 	fontCachePath := filepath.Join(cache.Path(), "Hack.zip")
@@ -231,7 +253,7 @@ func (ir *Renderer) loadFonts() error {
 
 		data, err = font_.Download(url)
 		if err != nil {
-			return err
+			return &ConnectionError{reason: err.Error()}
 		}
 
 		err = stdOS.WriteFile(fontCachePath, data, 0644)
@@ -370,12 +392,10 @@ func (ir *Renderer) cleanContent() {
 	// cursor indication
 	saveCursorAnsi := "\x1b7"
 	if !strings.Contains(ir.AnsiString, saveCursorAnsi) {
-		ir.AnsiString += "_"
+		ir.AnsiString += ir.Cursor
 	}
-	ir.AnsiString = strings.ReplaceAll(ir.AnsiString, saveCursorAnsi, "_")
 
-	// replace rprompt with padding and mark right aligned blocks with a pointer
-	ir.AnsiString = strings.ReplaceAll(ir.AnsiString, "\x1b[1000C", strings.Repeat(" ", ir.RPromptOffset))
+	ir.AnsiString = strings.ReplaceAll(ir.AnsiString, saveCursorAnsi, ir.Cursor)
 
 	// add watermarks
 	ir.AnsiString += "\n\n\x1b[1mohmyposh.dev\x1b[22m"
@@ -386,86 +406,99 @@ func (ir *Renderer) cleanContent() {
 }
 
 func (ir *Renderer) measureContent() (width, height float64) {
-	linewidth := 145
-	linewidth += ir.additionalWidth()
+	// Use actual rendering logic for accurate width measurement
+	// This simulates the exact same process as the actual drawing to ensure
+	// the canvas width perfectly matches the rendered content width
+	var maxX float64
+	var x float64
+
+	// Save original ansi string and style state
+	originalAnsi := ir.AnsiString
+	originalStyle := ir.style
+	ir.style = ""
 
 	tmpDrawer := &font.Drawer{Face: ir.regular}
-	advance := tmpDrawer.MeasureString(strings.Repeat(" ", linewidth))
-	width = float64(advance >> 6)
-	// height, lines times font height and line spacing
-	height = float64(len(strings.Split(ir.AnsiString, "\n"))) * ir.fontHeight() * ir.lineSpacing
-	return width, height
-}
 
-/*
-additionalWidth returns the number of additional characters of width to allocate when drawing
-for characters that are 2 wide. A standard character will return 0
-Nerd Font glyphs will return 1, since most are double width
-*/
-func (ir *Renderer) additionalWidth() int {
-	longest := 0
-	var longestLine string
-	for line := range strings.SplitSeq(ir.AnsiString, "\n") {
-		length := ir.lenWithoutANSI(line)
-		if length > longest {
-			longestLine = line
-			longest = length
+	for ir.AnsiString != "" {
+		if !ir.processAnsiSequence() {
+			continue
+		}
+
+		runes := []rune(ir.AnsiString)
+		if len(runes) == 0 {
+			continue
+		}
+
+		str := string(runes[0:1])
+		ir.AnsiString = string(runes[1:])
+
+		// Use appropriate font face for measurement
+		var face font.Face
+		switch ir.style {
+		case bold:
+			face = ir.bold
+		case italic:
+			face = ir.italic
+		default:
+			face = ir.regular
+		}
+
+		tmpDrawer.Face = face
+		advance := tmpDrawer.MeasureString(str)
+		w := float64(advance >> 6)
+
+		// Add additional width for Nerd Font glyphs
+		w += (w * float64(ir.runeAdditionalWidth(runes[0])))
+
+		if str == "\n" {
+			x = 0
+			continue
+		}
+
+		x += w
+		if x > maxX {
+			maxX = x
 		}
 	}
 
-	var additionalWidth int
-	for _, rune := range longestLine {
-		additionalWidth += ir.runeAdditionalWidth(rune)
-	}
+	// Restore original state
+	ir.AnsiString = originalAnsi
+	ir.style = originalStyle
 
-	return additionalWidth
-}
+	// Ensure we have a minimum width for very short content
+	minWidth := tmpDrawer.MeasureString(strings.Repeat(" ", 80))
+	width = math.Max(maxX, float64(minWidth>>6))
 
-func (ir *Renderer) lenWithoutANSI(text string) int {
-	if len(text) == 0 {
-		return 0
-	}
-	// replace hyperlinks(file/http/https)
-	regexStr := ir.ansiSequenceRegexMap[link]
-	matches := regex.FindAllNamedRegexMatch(regexStr, text)
-	for _, match := range matches {
-		text = strings.ReplaceAll(text, match[str], match[url])
-	}
-	// replace console title
-	regexStr = ir.ansiSequenceRegexMap[consoleTitle]
-	matches = regex.FindAllNamedRegexMatch(regexStr, text)
-	for _, match := range matches {
-		text = strings.ReplaceAll(text, match[str], "")
-	}
-	stripped := regex.ReplaceAllString(terminal.AnsiRegex, text, "")
-	length := utf8.RuneCountInString(stripped)
-	for _, rune := range stripped {
-		length += ir.runeAdditionalWidth(rune)
-	}
-	return length
+	// height, lines times font height and line spacing
+	lines := strings.Split(originalAnsi, "\n")
+	height = float64(len(lines)) * ir.fontHeight() * ir.lineSpacing
+	return width, height
 }
 
 func (ir *Renderer) SavePNG() error {
-	var f = func(value float64) float64 { return ir.factor * value }
+	var scale = func(value float64) float64 { return ir.factor * value }
 
 	var (
-		corner   = f(6)
-		radius   = f(9)
-		distance = f(25)
+		corner   = scale(6)
+		radius   = scale(9)
+		distance = scale(25)
 	)
 
 	contentWidth, contentHeight := ir.measureContent()
 
 	// Make sure the output window is big enough in case no content or very few
-	// content will be rendered
-	contentWidth = math.Max(contentWidth, 3*distance+3*radius)
+	// content will be rendered. Also account for potential font variations.
+	minRequiredWidth := 3*distance + 3*radius
+	// Add extra buffer for wider fonts (20% more than minimum)
+	minRequiredWidth *= 1.2
+	contentWidth = math.Max(contentWidth, minRequiredWidth)
 
 	marginX, marginY := ir.margin, ir.margin
 	paddingX, paddingY := ir.padding, ir.padding
 
 	xOffset := marginX
 	yOffset := marginY
-	titleOffset := f(40)
+	titleOffset := scale(40)
 
 	width := contentWidth + 2*marginX + 2*paddingX
 	height := contentHeight + 2*marginY + 2*paddingY + titleOffset
@@ -499,16 +532,16 @@ func (ir *Renderer) SavePNG() error {
 	// Draw rounded rectangle with outline and three button to produce the
 	// impression of a window with controls and a content area
 	dc.DrawRoundedRectangle(xOffset, yOffset, width-2*marginX, height-2*marginY, corner)
-	dc.SetHexColor(ir.BgColor)
+	dc.SetHexColor(ir.BackgroundColor)
 	dc.Fill()
 
 	dc.DrawRoundedRectangle(xOffset, yOffset, width-2*marginX, height-2*marginY, corner)
 	dc.SetHexColor("#404040")
-	dc.SetLineWidth(f(1))
+	dc.SetLineWidth(scale(1))
 	dc.Stroke()
 
 	for i, color := range []string{red, yellow, green} {
-		dc.DrawCircle(xOffset+paddingX+float64(i)*distance+f(4), yOffset+paddingY+f(4), radius)
+		dc.DrawCircle(xOffset+paddingX+float64(i)*distance+scale(4), yOffset+paddingY+scale(4), radius)
 		dc.SetHexColor(color)
 		dc.Fill()
 	}
@@ -516,14 +549,16 @@ func (ir *Renderer) SavePNG() error {
 	// Apply the actual text into the prepared content area of the window
 	var x, y = xOffset + paddingX, yOffset + paddingY + titleOffset + ir.fontHeight()
 
-	for len(ir.AnsiString) != 0 {
-		if !ir.shouldPrint() {
+	for ir.AnsiString != "" {
+		if !ir.processAnsiSequence() {
 			continue
 		}
+
 		runes := []rune(ir.AnsiString)
 		if len(runes) == 0 {
 			continue
 		}
+
 		str := string(runes[0:1])
 		ir.AnsiString = string(runes[1:])
 		switch ir.style {
@@ -535,7 +570,7 @@ func (ir *Renderer) SavePNG() error {
 			dc.SetFontFace(ir.regular)
 		}
 
-		w, h := dc.MeasureString(str)
+		w, _ := dc.MeasureString(str)
 		// The gg library unfortunately returns a single character width for *all* glyphs in a font.
 		// So if we know the glyph to occupy n additional characters in width, allocate that area
 		// e.g. this will double the space for Nerd Fonts, but some could even be 3 or 4 wide
@@ -544,12 +579,18 @@ func (ir *Renderer) SavePNG() error {
 
 		if ir.backgroundColor != nil {
 			dc.SetRGB255(ir.backgroundColor.r, ir.backgroundColor.g, ir.backgroundColor.b)
-			// The background for a character needs love to align to the font we're using
-			// Not all fonts are rendered the same height or starting position,
-			// so we're shifting the background rectangles vertically to correct
-			dc.DrawRectangle(x, y-h+3, w, h+9)
+			// Use consistent line height for all background rectangles
+			fontLineHeight := ir.fontHeight() * ir.lineSpacing
+
+			// Center all characters (including powerline glyphs) within the line height
+			// Position background to align properly with text baseline and ensure consistent height
+			bgY := y - fontLineHeight*0.75 // Adjusted for better centering with text
+			bgHeight := fontLineHeight
+
+			dc.DrawRectangle(x, bgY, w, bgHeight)
 			dc.Fill()
 		}
+
 		if ir.foregroundColor != nil {
 			dc.SetRGB255(ir.foregroundColor.r, ir.foregroundColor.g, ir.foregroundColor.b)
 		} else {
@@ -558,21 +599,21 @@ func (ir *Renderer) SavePNG() error {
 
 		if str == "\n" {
 			x = xOffset + paddingX
-			y += h * ir.lineSpacing
+			y += ir.fontHeight() * ir.lineSpacing // Use consistent line height instead of character height
 			continue
 		}
 
 		dc.DrawString(str, x, y)
 
 		if ir.style == underline {
-			dc.DrawLine(x, y+f(4), x+w, y+f(4))
-			dc.SetLineWidth(f(1))
+			dc.DrawLine(x, y+scale(4), x+w, y+scale(4))
+			dc.SetLineWidth(scale(1))
 			dc.Stroke()
 		}
 
 		if ir.style == overline {
-			dc.DrawLine(x, y-f(22), x+w, y-f(22))
-			dc.SetLineWidth(f(1))
+			dc.DrawLine(x, y-scale(22), x+w, y-scale(22))
+			dc.SetLineWidth(scale(1))
 			dc.Stroke()
 		}
 
@@ -582,12 +623,13 @@ func (ir *Renderer) SavePNG() error {
 	return dc.SavePNG(ir.Path)
 }
 
-func (ir *Renderer) shouldPrint() bool {
+func (ir *Renderer) processAnsiSequence() bool {
 	for sequence, re := range ir.ansiSequenceRegexMap {
 		match := regex.FindNamedRegexMatch(re, ir.AnsiString)
 		if len(match) == 0 {
 			continue
 		}
+
 		ir.AnsiString = strings.TrimPrefix(ir.AnsiString, match[str])
 		switch sequence {
 		case invertedColor:
@@ -629,55 +671,110 @@ func (ir *Renderer) shouldPrint() bool {
 			ir.setBase16Color(match[bc])
 			return false
 		case link:
-			ir.AnsiString = match[url] + ir.AnsiString
+			ir.AnsiString = match[text] + ir.AnsiString
 		}
 	}
+
 	return true
 }
 
 func (ir *Renderer) setBase16Color(colorStr string) {
 	tempColor := ir.defaultForegroundColor
+
 	colorInt, err := strconv.Atoi(colorStr)
 	if err != nil {
 		ir.foregroundColor = tempColor
+		return
 	}
-	switch colorInt {
-	case 30, 40: // Black
-		tempColor = &RGB{1, 1, 1}
-	case 31, 41: // Red
-		tempColor = &RGB{222, 56, 43}
-	case 32, 42: // Green
-		tempColor = &RGB{57, 181, 74}
-	case 33, 43: // Yellow
-		tempColor = &RGB{255, 199, 6}
-	case 34, 44: // Blue
-		tempColor = &RGB{0, 111, 184}
-	case 35, 45: // Magenta
-		tempColor = &RGB{118, 38, 113}
-	case 36, 46: // Cyan
-		tempColor = &RGB{44, 181, 233}
-	case 37, 47: // White
-		tempColor = &RGB{204, 204, 204}
-	case 90, 100: // Bright Black (Gray)
-		tempColor = &RGB{128, 128, 128}
-	case 91, 101: // Bright Red
-		tempColor = &RGB{255, 0, 0}
-	case 92, 102: // Bright Green
-		tempColor = &RGB{0, 255, 0}
-	case 93, 103: // Bright Yellow
-		tempColor = &RGB{255, 255, 0}
-	case 94, 104: // Bright Blue
-		tempColor = &RGB{0, 0, 255}
-	case 95, 105: // Bright Magenta
-		tempColor = &RGB{255, 0, 255}
-	case 96, 106: // Bright Cyan
-		tempColor = &RGB{101, 194, 205}
-	case 97, 107: // Bright White
-		tempColor = &RGB{255, 255, 255}
+
+	// Check for color override first
+	colorName := colorNameFromCode(colorInt)
+	if rgb, err := ir.Colors.RGBFromColorName(colorName); err == nil {
+		tempColor = rgb
 	}
+
+	// If no override found, use default colors
+	if tempColor == ir.defaultForegroundColor {
+		switch colorInt {
+		case 30, 40: // Black
+			tempColor = &RGB{1, 1, 1}
+		case 31, 41: // Red
+			tempColor = &RGB{222, 56, 43}
+		case 32, 42: // Green
+			tempColor = &RGB{57, 181, 74}
+		case 33, 43: // Yellow
+			tempColor = &RGB{255, 199, 6}
+		case 34, 44: // Blue
+			tempColor = &RGB{0, 111, 184}
+		case 35, 45: // Magenta
+			tempColor = &RGB{118, 38, 113}
+		case 36, 46: // Cyan
+			tempColor = &RGB{44, 181, 233}
+		case 37, 47: // White
+			tempColor = &RGB{204, 204, 204}
+		case 90, 100: // Bright Black (Gray)
+			tempColor = &RGB{128, 128, 128}
+		case 91, 101: // Bright Red
+			tempColor = &RGB{255, 0, 0}
+		case 92, 102: // Bright Green
+			tempColor = &RGB{0, 255, 0}
+		case 93, 103: // Bright Yellow
+			tempColor = &RGB{255, 255, 0}
+		case 94, 104: // Bright Blue
+			tempColor = &RGB{0, 0, 255}
+		case 95, 105: // Bright Magenta
+			tempColor = &RGB{255, 0, 255}
+		case 96, 106: // Bright Cyan
+			tempColor = &RGB{101, 194, 205}
+		case 97, 107: // Bright White
+			tempColor = &RGB{255, 255, 255}
+		}
+	}
+
 	if colorInt < 40 || (colorInt >= 90 && colorInt < 100) {
 		ir.foregroundColor = tempColor
 		return
 	}
+
 	ir.backgroundColor = tempColor
+}
+
+// colorNameFromCode maps ANSI color codes to color names
+func colorNameFromCode(colorInt int) string {
+	switch colorInt {
+	case 30, 40:
+		return "black"
+	case 31, 41:
+		return "red"
+	case 32, 42:
+		return "green"
+	case 33, 43:
+		return "yellow"
+	case 34, 44:
+		return "blue"
+	case 35, 45:
+		return "magenta"
+	case 36, 46:
+		return "cyan"
+	case 37, 47:
+		return "white"
+	case 90, 100:
+		return "darkGray"
+	case 91, 101:
+		return "lightRed"
+	case 92, 102:
+		return "lightGreen"
+	case 93, 103:
+		return "lightYellow"
+	case 94, 104:
+		return "lightBlue"
+	case 95, 105:
+		return "lightMagenta"
+	case 96, 106:
+		return "lightCyan"
+	case 97, 107:
+		return "lightWhite"
+	default:
+		return ""
+	}
 }

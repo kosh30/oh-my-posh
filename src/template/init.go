@@ -2,7 +2,9 @@ package template
 
 import (
 	"sync"
+	"text/template"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/generics"
 	"github.com/jandedobbeleer/oh-my-posh/src/maps"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 )
@@ -24,16 +26,17 @@ var (
 	knownFields sync.Map
 )
 
-func Init(environment runtime.Environment, vars maps.Simple, aliases *maps.Config) {
+func Init(environment runtime.Environment, vars maps.Simple[any], aliases *maps.Config) {
 	env = environment
 	shell = env.Shell()
 	knownFields = sync.Map{}
 
-	renderPool = sync.Pool{
-		New: func() any {
-			return newTextPoolObject()
-		},
-	}
+	renderPool = generics.NewPool(func() *renderer {
+		return &renderer{
+			template: template.New("cache").Funcs(funcMap()),
+			context:  &context{},
+		}
+	})
 
 	if Cache != nil {
 		return

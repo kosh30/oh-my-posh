@@ -25,9 +25,7 @@ var noticeCmd = &cobra.Command{
 		defer env.Close()
 
 		sh := os.Getenv("POSH_SHELL")
-		configFile := config.Path(configFlag)
-		cfg, _ := config.Load(configFile, sh, false)
-		cfg.Upgrade.Cache = env.Cache()
+		cfg, _ := config.Load(configFlag, sh, false)
 
 		if notice, hasNotice := cfg.Upgrade.Notice(); hasNotice {
 			fmt.Println(notice)

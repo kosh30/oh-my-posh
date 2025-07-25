@@ -25,7 +25,7 @@ func (t *Text) Render() (string, error) {
 
 	t.patchTemplate()
 
-	renderer := renderPool.Get().(*renderer)
+	renderer := renderPool.Get()
 	defer renderer.release()
 
 	return renderer.execute(t)
@@ -214,7 +214,7 @@ func (f *fields) append(values any) {
 }
 
 func (f *fields) add(field string) {
-	if len(field) == 0 {
+	if field == "" {
 		return
 	}
 

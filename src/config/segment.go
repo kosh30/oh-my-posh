@@ -31,7 +31,7 @@ func (s *SegmentStyle) resolve(context any) SegmentStyle {
 	value, err := txtTemplate.Render()
 
 	// default to Plain
-	if err != nil || len(value) == 0 {
+	if err != nil || value == "" {
 		return Plain
 	}
 
@@ -75,6 +75,7 @@ type Segment struct {
 	InvertPowerline        bool           `json:"invert_powerline,omitempty" toml:"invert_powerline,omitempty" yaml:"invert_powerline,omitempty"`
 	Force                  bool           `json:"force,omitempty" toml:"force,omitempty" yaml:"force,omitempty"`
 	restored               bool           `json:"-" toml:"-" yaml:"-"`
+	Index                  int            `json:"index,omitempty" toml:"index,omitempty" yaml:"index,omitempty"`
 }
 
 func (segment *Segment) Name() string {
@@ -83,7 +84,7 @@ func (segment *Segment) Name() string {
 	}
 
 	name := segment.Alias
-	if len(name) == 0 {
+	if name == "" {
 		name = c.Title(language.English).String(string(segment.Type))
 	}
 
@@ -220,7 +221,7 @@ func (segment *Segment) HasEmptyDiamondAtEnd() bool {
 		return false
 	}
 
-	return len(segment.TrailingDiamond) == 0
+	return segment.TrailingDiamond == ""
 }
 
 func (segment *Segment) hasCache() bool {
@@ -299,16 +300,12 @@ func (segment *Segment) cacheKey() string {
 }
 
 func (segment *Segment) folderKey() string {
-	ctx, ok := segment.writer.(cache.Context)
+	key, ok := segment.writer.CacheKey()
 	if !ok {
 		return segment.env.Pwd()
 	}
 
-	if key, OK := ctx.CacheKey(); OK {
-		return key
-	}
-
-	return segment.env.Pwd()
+	return key
 }
 
 func (segment *Segment) string() string {
@@ -317,7 +314,7 @@ func (segment *Segment) string() string {
 		return result
 	}
 
-	if len(segment.Template) == 0 {
+	if segment.Template == "" {
 		segment.Template = segment.writer.Template()
 	}
 
@@ -386,4 +383,12 @@ func (segment *Segment) evaluateNeeds() {
 
 		segment.Needs = append(segment.Needs, segmentName)
 	}
+}
+
+func (segment *Segment) key() any {
+	if segment.Index > 0 {
+		return segment.Index - 1
+	}
+
+	return segment.Name()
 }
