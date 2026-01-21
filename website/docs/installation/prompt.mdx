@@ -16,10 +16,12 @@ oh-my-posh get shell
 ```
 
 <Tabs
+  queryString="shell"
   defaultValue="powershell"
   groupId="shell"
   values={[
     { label: 'bash', value: 'bash', },
+    { label: 'claude', value: 'claude', },
     { label: 'cmd', value: 'cmd', },
     { label: 'elvish', value: 'elvish', },
     { label: 'fish', value: 'fish', },
@@ -48,6 +50,25 @@ Or, when using `~/.profile`.
 ```bash
 . ~/.profile
 ```
+
+</TabItem>
+<TabItem value="claude">
+
+To enable Claude Code integration with Oh My Posh, configure Claude Code to use Oh My Posh as the statusline command.
+
+Add the following to your Claude Code settings:
+
+```json title="~/.claude/settings.json"
+{
+  "statusLine": {
+    "type": "command",
+    "command": "oh-my-posh claude",
+    "padding": 0
+  }
+}
+```
+
+For more information about the Claude segment properties and customization options, see the [Claude segment documentation](/docs/segments/cli/claude).
 
 </TabItem>
 <TabItem value="cmd">
@@ -98,7 +119,7 @@ exec elvish
 <TabItem value="fish">
 
 :::caution
-It is recommended to use the latest version of Fish. Versions below 3.1.2 have issues displaying the prompt.
+It is recommended to use the latest version of Fish. Versions below 4.1.0 have issues and do not support [transient prompt].
 :::
 
 Add the following snippet as the last line to `~/.config/fish/config.fish`:
@@ -217,6 +238,6 @@ exec zsh
 </Tabs>
 
 [clink]: https://chrisant996.github.io/clink/
-[iterm2]: https://www.iterm2.com/
-[homebrew-problem]: https://github.com/JanDeDobbeleer/oh-my-posh/discussions/2644
+[iterm2]: https://iterm2.com/
 [sign]: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_signing?view=powershell-7.3#methods-of-signing-scripts
+[transient prompt]: /docs/configuration/transient

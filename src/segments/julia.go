@@ -1,7 +1,7 @@
 package segments
 
 type Julia struct {
-	language
+	Language
 }
 
 func (j *Julia) Template() string {
@@ -10,14 +10,15 @@ func (j *Julia) Template() string {
 
 func (j *Julia) Enabled() bool {
 	j.extensions = []string{"*.jl"}
-	j.commands = []*cmd{
-		{
+	j.tooling = map[string]*cmd{
+		"julia": {
 			executable: "julia",
 			args:       []string{"--version"},
 			regex:      `julia version (?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+)))`,
 		},
 	}
+	j.defaultTooling = []string{"julia"}
 	j.versionURLTemplate = "https://github.com/JuliaLang/julia/releases/tag/v{{ .Full }}"
 
-	return j.language.Enabled()
+	return j.Language.Enabled()
 }

@@ -1,7 +1,7 @@
 package segments
 
 type AzFunc struct {
-	language
+	Language
 }
 
 func (az *AzFunc) Template() string {
@@ -10,14 +10,14 @@ func (az *AzFunc) Template() string {
 
 func (az *AzFunc) Enabled() bool {
 	az.extensions = []string{"host.json", "local.settings.json", "function.json"}
-	az.commands = []*cmd{
-		{
-
+	az.tooling = map[string]*cmd{
+		"func": {
 			executable: "func",
 			args:       []string{"--version"},
 			regex:      `(?P<version>[0-9.]+)`,
 		},
 	}
+	az.defaultTooling = []string{"func"}
 
-	return az.language.Enabled()
+	return az.Language.Enabled()
 }

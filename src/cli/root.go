@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/spf13/cobra"
 )
@@ -33,11 +34,12 @@ var RootCmd = &cobra.Command{
 It can use the same configuration everywhere to offer a consistent
 experience, regardless of where you are. For a detailed guide
 on getting started, have a look at the docs at https://ohmyposh.dev`,
-	Run: func(cmd *cobra.Command, _ []string) {
+	Run: func(cmd *cobra.Command, args []string) {
 		if initialize {
-			runInit(strings.ToLower(shellName))
+			runInit(strings.ToLower(shellName), getFullCommand(cmd, args))
 			return
 		}
+
 		if printVersion {
 			fmt.Println(build.Version)
 			return
@@ -45,9 +47,9 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 
 		_ = cmd.Help()
 	},
-	PersistentPreRun: func(_ *cobra.Command, _ []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		traceEnv := os.Getenv("POSH_TRACE")
-		if traceEnv == "" {
+		if traceEnv == "" && !trace {
 			return
 		}
 
@@ -55,7 +57,8 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 
 		log.Enable(true)
 
-		log.Debug("oh-my-posh version", build.Version)
+		log.Debug("version:", build.Version)
+		log.Debug("command:", getFullCommand(cmd, args))
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		defer func() {
@@ -68,17 +71,17 @@ on getting started, have a look at the docs at https://ohmyposh.dev`,
 			return
 		}
 
-		timestamp := time.Now().Format("20060102T150405.000")
-		cli := append([]string{cmd.Name()}, args...)
-		filename := fmt.Sprintf("%s-%s.log", timestamp, strings.Join(cli, "-"))
-
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return
+		var prefix string
+		if shellName != "" {
+			prefix = fmt.Sprintf("%s-", shellName)
 		}
 
-		logPath := filepath.Join(home, ".oh-my-posh")
-		err = os.MkdirAll(logPath, 0755)
+		cli := append([]string{cmd.Name()}, args...)
+
+		filename := fmt.Sprintf("%s-%s%s.log", time.Now().Format("02012006T150405.000"), prefix, strings.Join(cli, "-"))
+
+		logPath := filepath.Join(cache.Path(), "logs")
+		err := os.MkdirAll(logPath, 0755)
 		if err != nil {
 			return
 		}
@@ -100,6 +103,8 @@ func Execute() {
 func init() {
 	RootCmd.PersistentFlags().StringVarP(&configFlag, "config", "c", "", "config file path")
 	RootCmd.PersistentFlags().BoolVar(&silent, "silent", false, "do not print anything")
+	RootCmd.PersistentFlags().BoolVar(&trace, "trace", false, "enable tracing")
+	RootCmd.PersistentFlags().BoolVar(&plain, "plain", false, "plain text output (no ANSI)")
 	RootCmd.Flags().BoolVar(&printVersion, "version", false, "print the version number and exit")
 
 	// Deprecated flags, should be kept to avoid breaking CLI integration.

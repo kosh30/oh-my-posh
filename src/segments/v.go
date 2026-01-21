@@ -1,7 +1,7 @@
 package segments
 
 type V struct {
-	language
+	Language
 }
 
 func (v *V) Template() string {
@@ -11,12 +11,13 @@ func (v *V) Template() string {
 func (v *V) Enabled() bool {
 	v.extensions = []string{"*.v"}
 
-	v.commands = []*cmd{
-		{
+	v.tooling = map[string]*cmd{
+		"v": {
 			executable: "v",
 			args:       []string{"--version"},
 			regex:      `V (?P<version>(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)) [a-f0-9]+`,
 		},
 	}
-	return v.language.Enabled()
+	v.defaultTooling = []string{"v"}
+	return v.Language.Enabled()
 }

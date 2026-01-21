@@ -1,17 +1,15 @@
 package segments
 
-import (
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
-)
+import "github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 
 type Haskell struct {
-	language
+	Language
 
 	StackGhc bool
 }
 
 const (
-	StackGhcMode properties.Property = "stack_ghc_mode"
+	StackGhcMode options.Option = "stack_ghc_mode"
 )
 
 func (h *Haskell) Template() string {
@@ -20,33 +18,34 @@ func (h *Haskell) Template() string {
 
 func (h *Haskell) Enabled() bool {
 	ghcRegex := `(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+)))`
-	ghcCmd := &cmd{
-		executable: "ghc",
-		args:       []string{"--numeric-version"},
-		regex:      ghcRegex,
-	}
-
-	stackGhcCmd := &cmd{
-		executable: "stack",
-		args:       []string{"ghc", "--", "--numeric-version"},
-		regex:      ghcRegex,
-	}
 
 	h.extensions = []string{"*.hs", "*.lhs", "stack.yaml", "package.yaml", "*.cabal", "cabal.project"}
-	h.commands = []*cmd{ghcCmd}
+	h.tooling = map[string]*cmd{
+		"ghc": {
+			executable: "ghc",
+			args:       []string{"--numeric-version"},
+			regex:      ghcRegex,
+		},
+		"stack": {
+			executable: "stack",
+			args:       []string{"ghc", "--", "--numeric-version"},
+			regex:      ghcRegex,
+		},
+	}
+	h.defaultTooling = []string{"ghc"}
 	h.versionURLTemplate = "https://www.haskell.org/ghc/download_ghc_{{ .Major }}_{{ .Minor }}_{{ .Patch }}.html"
 
-	switch h.props.GetString(StackGhcMode, "never") {
+	switch h.options.String(StackGhcMode, "never") {
 	case "always":
-		h.commands = []*cmd{stackGhcCmd}
+		h.defaultTooling = []string{"stack"}
 		h.StackGhc = true
 	case "package":
 		_, err := h.env.HasParentFilePath("stack.yaml", false)
 		if err == nil {
-			h.commands = []*cmd{stackGhcCmd}
+			h.defaultTooling = []string{"stack"}
 			h.StackGhc = true
 		}
 	}
 
-	return h.language.Enabled()
+	return h.Language.Enabled()
 }

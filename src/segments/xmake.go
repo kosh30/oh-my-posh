@@ -1,7 +1,7 @@
 package segments
 
 type XMake struct {
-	language
+	Language
 }
 
 func (x *XMake) Template() string {
@@ -10,13 +10,14 @@ func (x *XMake) Template() string {
 
 func (x *XMake) Enabled() bool {
 	x.extensions = []string{"xmake.lua"}
-	x.commands = []*cmd{
-		{
+	x.tooling = map[string]*cmd{
+		"xmake": {
 			executable: "xmake",
 			args:       []string{"--version"},
 			regex:      `xmake v(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+)))`,
 		},
 	}
+	x.defaultTooling = []string{"xmake"}
 
-	return x.language.Enabled()
+	return x.Language.Enabled()
 }

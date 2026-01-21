@@ -3,34 +3,36 @@ import useBaseUrl from "@docusaurus/useBaseUrl";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Layout from "@theme/Layout";
 import classnames from "classnames";
-import React from "react";
 import styles from "./styles.module.css";
 
 const features = [
   {
-    title: <>Colors</>,
+    title: <>🎨 Beautiful & Intelligent</>,
     description: (
       <>
-        Oh My Posh enables you to use the full color set of your terminal
-        by using colors to define and render the prompt.
+        Transform your terminal with stunning themes and intelligent segments that display
+        Git status, cloud info, language versions, system metrics, and 180+ other contextual details.
+        Your prompt adapts to what you're working on.
       </>
     ),
   },
   {
-    title: <>Customizable</>,
-    description:
-      <>
-        Easily adjust existing themes or create your own. From standard segments
-        all the way to custom implementations.
-      </>,
-  },
-  {
-    title: <>Portable</>,
+    title: <>⚡ Lightning Fast</>,
     description: (
       <>
-        No matter which shell you're using, or even how many, you can
-        carry the configuration from one shell and/or machine to another
-        for the same prompt everywhere you work.
+        Built with Go for blazing performance. Smart caching and async operations ensure
+        your prompt renders instantly, even with complex configurations and multiple segments.
+        No more waiting for your terminal.
+      </>
+    ),
+  },
+  {
+    title: <>🌍 Universal Compatibility</>,
+    description: (
+      <>
+        One configuration works everywhere - PowerShell, Bash, Zsh, Fish, Nu Shell, and more.
+        Windows, macOS, Linux, WSL, containers, SSH sessions. Write once, use everywhere
+        with zero vendor lock-in.
       </>
     ),
   },
@@ -80,7 +82,7 @@ function Home() {
               See themes &rarr;
             </Link>
           </div>
-          <img class="hero--image" src="/img/hero.png" alt="Oh My Posh prompt"></img>
+          <img className="hero--image" src="/img/hero.png" alt="Oh My Posh prompt"></img>
         </div>
       </header>
       <main>

@@ -2,13 +2,13 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
+	runtimelib "runtime"
 	"strings"
 	"time"
 
@@ -17,35 +17,131 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime/http"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
-	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 
-	json "github.com/goccy/go-json"
 	toml "github.com/pelletier/go-toml/v2"
-	yaml "gopkg.in/yaml.v3"
+	yaml "go.yaml.in/yaml/v3"
 )
 
-const (
-	defaultHash = "default"
+// Custom error types for config validation
+type Error struct {
+	message string
+}
+
+func (e Error) Error() string {
+	return fmt.Sprintf(" %s ", e.message)
+}
+
+var (
+	ErrFileNotFound     = Error{"CONFIG NOT FOUND"}
+	ErrInvalidExtension = Error{"INVALID CONFIG EXTENSION"}
+	ErrInvalidTheme     = Error{"INVALID CONFIG THEME"}
+	ErrURLFetch         = Error{"CONFIG URL FETCH FAILED"}
+	ErrParse            = Error{"CONFIG PARSE ERROR"}
+	ErrNoConfig         = Error{"NO CONFIG"}
 )
 
-// Load returns the default configuration including possible user overrides
-func Load(configFile, sh string, migrate bool) (*Config, string) {
+func Load(configFile string) *Config {
 	defer log.Trace(time.Now())
 
-	configFile, err := filePath(configFile)
+	cfg, err := Parse(configFile)
+	if err != nil {
+		cfg = Default(err)
+	}
+
+	return cfg
+}
+
+func resolveConfigLocation(config string) string {
+	defer log.Trace(time.Now())
+
+	if strings.HasPrefix(config, "https://") {
+		return config
+	}
+
+	if url, OK := isTheme(config); OK {
+		log.Debug("theme detected, using theme file")
+		return url
+	}
+
+	// Clean the config path so it works regardless of the OS
+	config = filepath.ToSlash(config)
+
+	// Cygwin path always needs the full path as we're on Windows but not really.
+	// Doing filepath actions will convert it to a Windows path and break the init script.
+	if isCygwin() {
+		log.Debug("cygwin detected, using full path for config")
+		return config
+	}
+
+	configFile := path.ReplaceTildePrefixWithHomeDir(config)
+
+	abs, err := filepath.Abs(configFile)
 	if err != nil {
 		log.Error(err)
-		warning := !errors.Is(err, ErrNoConfig)
-		return Default(warning), defaultHash
+		return filepath.Clean(configFile)
 	}
 
-	cfg, hash := readConfig(configFile)
+	return abs
+}
 
-	// only migrate automatically when the switch isn't set
-	if !migrate && cfg.Version < Version {
-		cfg.BackupAndMigrate()
+type hashWriter interface {
+	Write(p []byte) (n int, err error)
+}
+
+func Parse(configFile string) (*Config, error) {
+	defer log.Trace(time.Now())
+
+	if configFile == "" {
+		log.Debug("no config file specified")
+		return nil, ErrNoConfig
 	}
+
+	configFile = resolveConfigLocation(configFile)
+
+	configDSC := DSC()
+	configDSC.Load()
+	configDSC.Add(configFile)
+
+	defer configDSC.Save()
+
+	h := fnv.New64a()
+
+	cfg, err := read(configFile, h)
+	if err != nil {
+		log.Errorf("failed to read config: %s", configFile)
+		return nil, err
+	}
+
+	parentFolder := filepath.Dir(configFile)
+
+	for cfg.Extends != "" {
+		cfg.Extends = resolvePath(cfg.Extends, parentFolder)
+		base, err := read(cfg.Extends, h)
+		if err != nil {
+			log.Errorf("failed to read extended config: %s", cfg.Extends)
+			break
+		}
+
+		configDSC.Add(cfg.Extends)
+
+		err = base.merge(cfg)
+		if err != nil {
+			log.Error(err)
+			break
+		}
+
+		cfg = base
+	}
+
+	cfg.Source = configFile
+	cfg.hash = h.Sum64()
+	// Migrate segment properties to options for TOML configs
+	// (go-toml/v2 doesn't support custom unmarshalers)
+	cfg.migrateSegmentProperties()
+
+	cfg.toggleSegments()
 
 	if cfg.Upgrade == nil {
 		cfg.Upgrade = &upgrade.Config{
@@ -60,156 +156,99 @@ func Load(configFile, sh string, migrate bool) (*Config, string) {
 		cfg.Upgrade.Interval = cache.ONEWEEK
 	}
 
-	cfg.Source = configFile
-
-	if cfg.extended {
-		fileName := fmt.Sprintf("%s.omp.json", hash)
-		cfg.Source = filepath.Join(cache.Path(), fileName)
-		cfg.Write(JSON)
-	}
-
-	if !cfg.ShellIntegration {
-		return cfg, hash
-	}
-
-	// bash  - ok
-	// fish  - ok
-	// pwsh  - ok
-	// zsh   - ok
-	// cmd   - ok, as of v1.4.25 (chrisant996/clink#457, fixed in chrisant996/clink@8a5d7ea)
-	// nu    - built-in (and bugged) feature - nushell/nushell#5585, https://www.nushell.sh/blog/2022-08-16-nushell-0_67.html#shell-integration-fdncred-and-tyriar
-	// elv   - broken OSC sequences
-	// xonsh - broken OSC sequences
-	switch sh {
-	case shell.ELVISH, shell.XONSH, shell.NU:
-		cfg.ShellIntegration = false
-	}
-
-	return cfg, hash
+	return cfg, nil
 }
 
-// custom no config error
-var ErrNoConfig = errors.New("no config file specified")
-
-func filePath(config string) (string, error) {
-	defer log.Trace(time.Now())
-
-	// if the config flag is set, we'll use that over POSH_THEME
-	// in our internal shell logic, we'll always use the POSH_THEME
-	// due to not using --config to set the configuration
-	hasConfig := len(config) > 0
-
-	if poshTheme := os.Getenv("POSH_THEME"); len(poshTheme) > 0 && !hasConfig {
-		log.Debug("config set using POSH_THEME:", poshTheme)
-		return poshTheme, nil
+func resolvePath(configFile, parentFolder string) string {
+	if url, OK := isTheme(configFile); OK {
+		return url
 	}
 
-	if !hasConfig {
-		return "", ErrNoConfig
+	if strings.HasPrefix(configFile, "https://") {
+		return configFile
 	}
 
-	if url, OK := isTheme(config); OK {
-		log.Debug("theme detected, using theme file")
-		config = url
+	configFile = path.ReplaceTildePrefixWithHomeDir(configFile)
+
+	if filepath.IsAbs(configFile) {
+		return configFile
 	}
 
-	if strings.HasPrefix(config, "https://") {
-		filePath, err := Download(cache.Path(), config)
-		if err != nil {
-			log.Error(err)
-			return "", err
-		}
-
-		return filePath, nil
-	}
-
-	isCygwin := func() bool {
-		return runtime.GOOS == "windows" && len(os.Getenv("OSTYPE")) > 0
-	}
-
-	// Cygwin path always needs the full path as we're on Windows but not really.
-	// Doing filepath actions will convert it to a Windows path and break the init script.
-	if isCygwin() {
-		log.Debug("cygwin detected, using full path for config")
-		return config, nil
-	}
-
-	configFile := path.ReplaceTildePrefixWithHomeDir(config)
-
-	abs, err := filepath.Abs(configFile)
-	if err != nil {
-		log.Error(err)
-		return filepath.Clean(configFile), nil
-	}
-
-	return abs, nil
+	return filepath.Join(parentFolder, configFile)
 }
 
-func readConfig(configFile string) (*Config, string) {
+func read(configFile string, h hashWriter) (*Config, error) {
 	defer log.Trace(time.Now())
 
 	if configFile == "" {
 		log.Debug("no config file specified, using default")
-		return Default(false), defaultHash
+		return Default(nil), nil
 	}
 
 	var cfg Config
 	cfg.Source = configFile
 	cfg.Format = strings.TrimPrefix(filepath.Ext(configFile), ".")
 
-	data, err := os.ReadFile(configFile)
+	data, err := getData(configFile)
 	if err != nil {
-		log.Error(err)
-		return Default(true), defaultHash
+		// Determine the type of error
+		if strings.HasPrefix(configFile, "https://") {
+			log.Errorf("failed to fetch config from URL: %v", err)
+			return nil, ErrURLFetch
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			log.Errorf("config file not found: %v", err)
+			return nil, ErrFileNotFound
+		}
+		log.Errorf("failed to read config: %v", err)
+		return nil, ErrFileNotFound
 	}
 
+	var parseErr error
 	switch cfg.Format {
-	case "yml", "yaml":
+	case YAML, YML:
 		cfg.Format = YAML
-		err = yaml.Unmarshal(data, &cfg)
-	case "jsonc", "json":
+		parseErr = yaml.Unmarshal(data, &cfg)
+	case JSONC, JSON:
 		cfg.Format = JSON
 
 		str := jsonutil.StripComments(string(data))
 		data = []byte(str)
 
 		decoder := json.NewDecoder(bytes.NewReader(data))
-		err = decoder.Decode(&cfg)
-	case "toml", "tml":
+		parseErr = decoder.Decode(&cfg)
+	case TOML, TML:
 		cfg.Format = TOML
-		err = toml.Unmarshal(data, &cfg)
+		parseErr = toml.Unmarshal(data, &cfg)
 	default:
-		err = fmt.Errorf("unsupported config file format: %s", cfg.Format)
+		log.Errorf("unsupported config file format: %s", cfg.Format)
+		return nil, ErrInvalidExtension
 	}
 
-	if err != nil {
-		log.Error(err)
-		return Default(true), defaultHash
+	if parseErr != nil {
+		log.Errorf("failed to parse config: %v", parseErr)
+		return nil, ErrParse
 	}
 
-	// Calculate FNV-1a hash of the raw config data
-	data = append(data, []byte(configFile)...) // Include the file path in the hash to enable file modification detection
-	hasher := fnv.New64a()
-	hasher.Write(data)
-	hash := strconv.FormatUint(hasher.Sum64(), 16)
-
-	if cfg.Extends == "" {
-		return &cfg, hash
-	}
-
-	basePath, err := filePath(cfg.Extends)
-	if err != nil {
-		log.Error(err)
-		return &cfg, hash
-	}
-
-	base, baseHash := readConfig(basePath)
-	err = base.merge(&cfg)
+	_, err = h.Write(data)
 	if err != nil {
 		log.Error(err)
 	}
 
-	return base, fmt.Sprintf("%s.%s", hash, baseHash)
+	return &cfg, nil
+}
+
+func getData(configFile string) ([]byte, error) {
+	if !strings.HasPrefix(configFile, "https://") {
+		return os.ReadFile(configFile)
+	}
+
+	return http.Download(configFile, true)
+}
+
+// isCygwin checks if we're running in Cygwin environment
+func isCygwin() bool {
+	return runtimelib.GOOS == "windows" && len(os.Getenv("OSTYPE")) > 0
 }
 
 func isTheme(config string) (string, bool) {
@@ -340,14 +379,39 @@ func isTheme(config string) (string, bool) {
 		"zash":                     "zash.omp.json",
 	}
 
-	config = strings.ToLower(config)
-	if theme, ok := themes[config]; ok {
-		log.Debug("theme found:", config)
-		url := fmt.Sprintf("https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/refs/tags/v%s/themes/%s", build.Version, theme)
-		return url, true
+	themeFile, OK := themes[config]
+	if !OK {
+		log.Debug(config, "is not a theme")
+		return "", false
 	}
 
-	log.Debug("theme not found for:", config)
+	log.Debug(config, "is a theme")
 
-	return "", false
+	if themeFilePath, err := getMSIXThemePath(themeFile); err == nil {
+		return themeFilePath, true
+	}
+
+	log.Debug("building theme URL for:", themeFile)
+	url := fmt.Sprintf("https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/refs/tags/v%s/themes/%s", build.Version, themeFile)
+	return url, true
+}
+
+func getMSIXThemePath(themeFile string) (string, error) {
+	log.Trace(time.Now(), themeFile)
+
+	// For MSIX packages, the executable location is the package root
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+
+	themeFilePath := filepath.Join(filepath.Dir(exePath), "themes", themeFile)
+	if _, err := os.Stat(themeFilePath); err != nil {
+		log.Error(err)
+		return "", err
+	}
+
+	log.Debug("found theme in MSIX installation:", themeFilePath)
+	return themeFilePath, nil
 }

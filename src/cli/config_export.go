@@ -3,17 +3,21 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
-	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 
 	"github.com/spf13/cobra"
 )
 
-var output string
+var (
+	format string
+	output string
+)
 
 // exportCmd represents the export command
 var exportCmd = &cobra.Command{
@@ -41,23 +45,32 @@ Exports the current config to "~/new_config.omp.json" (in JSON format).`,
 			return
 		}
 
-		cfg, _ := config.Load(configFlag, shell.GENERIC, false)
+		cache.Init(os.Getenv("POSH_SHELL"))
+
+		err := setConfigFlag()
+		if err != nil {
+			exitcode = 666
+			fmt.Println(err.Error())
+			return
+		}
+
+		cfg := config.Load(configFlag)
 
 		validateExportFormat := func() error {
 			format = strings.ToLower(format)
 			switch format {
-			case "json", "jsonc":
+			case config.JSON, config.JSONC:
 				format = config.JSON
-			case "toml", "tml":
+			case config.TOML, config.TML:
 				format = config.TOML
-			case "yaml", "yml":
+			case config.YAML, config.YML:
 				format = config.YAML
 			default:
-				formats := []string{"json", "jsonc", "toml", "tml", "yaml", "yml"}
+				formats := []string{config.JSON, config.JSONC, config.TOML, config.TML, config.YAML, config.YML}
 				// usage error
 				fmt.Printf("export format must be one of these: %s\n", strings.Join(formats, ", "))
 				exitcode = 2
-				return errors.New("invalide export format")
+				return errors.New("invalid export format")
 			}
 
 			return nil

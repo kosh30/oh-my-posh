@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   docs: [
     {
       type: "category",
@@ -7,25 +7,18 @@ module.exports = {
       items: [
         {
           type: "category",
-          label: "🚀 Get started",
+          label: "📦 Installation",
           collapsed: false,
           items: [
-            {
-              type: "category",
-              label: "📦 Installation",
-              collapsed: false,
-              items: [
-                "installation/windows",
-                "installation/macos",
-                "installation/linux",
-              ],
-            },
-            "installation/fonts",
-            "installation/prompt",
-            "installation/customize",
-            "installation/upgrade",
+            "installation/windows",
+            "installation/macos",
+            "installation/linux",
           ],
         },
+        "installation/fonts",
+        "installation/prompt",
+        "installation/customize",
+        "installation/upgrade",
       ],
     },
     {
@@ -66,7 +59,9 @@ module.exports = {
             "segments/cli/bazel",
             "segments/cli/buf",
             "segments/cli/bun",
+            "segments/cli/claude",
             "segments/cli/cmake",
+            "segments/cli/copilot",
             "segments/cli/deno",
             "segments/cli/docker",
             "segments/cli/firebase",
@@ -125,6 +120,7 @@ module.exports = {
           label: "✍️ Languages",
           collapsed: true,
           items: [
+            "segments/languages/clojure",
             "segments/languages/crystal",
             "segments/languages/dart",
             "segments/languages/dotnet",
@@ -182,7 +178,6 @@ module.exports = {
           collapsed: true,
           items: [
             "segments/system/battery",
-            "segments/system/command",
             "segments/system/connection",
             "segments/system/executiontime",
             "segments/system/os",
@@ -196,6 +191,7 @@ module.exports = {
             "segments/system/text",
             "segments/system/time",
             "segments/system/upgrade",
+            "segments/system/winget",
             "segments/system/winreg",
           ]
         },
@@ -206,8 +202,8 @@ module.exports = {
           items: [
             "segments/web/brewfather",
             "segments/web/carbonintensity",
-            "segments/web/ipify",
             "segments/web/http",
+            "segments/web/ipify",
             "segments/web/nba",
             "segments/web/owm",
             "segments/web/wakatime",
@@ -226,8 +222,17 @@ module.exports = {
         "contributing/plastic",
       ],
     },
+    "dsc",
     "themes",
     "share",
+    {
+      type: "category",
+      label: "🛠️ Advanced",
+      collapsed: true,
+      items: [
+        "advanced/mcp-server",
+      ],
+    },
     "faq",
     "migrating",
     "contributors",

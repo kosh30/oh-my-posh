@@ -3,14 +3,13 @@ package segments
 import (
 	"encoding/json"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
-	"github.com/jandedobbeleer/oh-my-posh/src/template"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 )
 
 type Wakatime struct {
-	base
+	Base
 
-	wtData
+	WtData
 }
 
 type wtTotals struct {
@@ -18,7 +17,7 @@ type wtTotals struct {
 	Seconds float64 `json:"seconds"`
 }
 
-type wtData struct {
+type WtData struct {
 	Start           string   `json:"start"`
 	End             string   `json:"end"`
 	CumulativeTotal wtTotals `json:"cumulative_total"`
@@ -34,31 +33,19 @@ func (w *Wakatime) Enabled() bool {
 }
 
 func (w *Wakatime) setAPIData() error {
-	url, err := w.getURL()
-	if err != nil {
-		return err
-	}
+	url := w.options.Template(URL, "", w)
 
-	httpTimeout := w.props.GetInt(properties.HTTPTimeout, properties.DefaultHTTPTimeout)
+	httpTimeout := w.options.Int(options.HTTPTimeout, options.DefaultHTTPTimeout)
 
 	body, err := w.env.HTTPRequest(url, nil, httpTimeout)
 	if err != nil {
 		return err
 	}
 
-	err = json.Unmarshal(body, &w.wtData)
+	err = json.Unmarshal(body, &w.WtData)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (w *Wakatime) getURL() (string, error) {
-	url := w.props.GetString(URL, "")
-	tmpl := &template.Text{
-		Template: url,
-		Context:  w,
-	}
-	return tmpl.Render()
 }

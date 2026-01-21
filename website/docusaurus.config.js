@@ -1,8 +1,6 @@
-const path = require('path');
-
-module.exports = {
+export default {
   title: 'Oh My Posh',
-  tagline: 'A prompt theme engine for any shell.',
+  tagline: 'The most customizable and fastest prompt engine for any shell.',
   url: 'https://ohmyposh.dev',
   baseUrl: '/',
   favicon: 'img/favicons.svg',
@@ -10,8 +8,7 @@ module.exports = {
   projectName: 'oh-my-posh',
   onBrokenLinks: 'ignore',
   plugins: [
-    path.resolve(__dirname, 'plugins', 'appinsights'),
-    'docusaurus-node-polyfills'
+    './plugins/appinsights'
   ],
   stylesheets: [
     "https://rsms.me/inter/inter.css",
@@ -24,7 +21,7 @@ module.exports = {
       respectPrefersColorScheme: true,
     },
     prism: {
-      additionalLanguages: ['powershell', 'lua', 'jsstacktrace', 'toml', 'json', 'yaml'],
+      additionalLanguages: ['powershell', 'lua', 'jsstacktrace', 'toml'],
     },
     docs: {
         sidebar: {
@@ -56,11 +53,6 @@ module.exports = {
           position: 'left',
         },
         {
-          href: 'https://polar.sh/oh-my-posh',
-          label: 'Buy',
-          position: 'left',
-        },
-        {
           href: 'https://swag.ohmyposh.dev',
           label: 'Swag',
           position: 'left',
@@ -69,12 +61,6 @@ module.exports = {
           href: 'https://github.com/jandedobbeleer/oh-my-posh',
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
-          position: 'right',
-        },
-        {
-          href: 'https://www.warp.dev/oh-my-posh',
-          className: 'header-affiliate-link',
-          'aria-label': 'Warp',
           position: 'right',
         },
         {
@@ -132,12 +118,8 @@ module.exports = {
               href: 'https://github.com/sponsors/JanDeDobbeleer',
             },
             {
-              label: 'Buy',
-              href: 'https://polar.sh/oh-my-posh',
-            },
-            {
-              label: 'Warp',
-              href: 'https://www.warp.dev/oh-my-posh',
+              label: 'Product spotlight',
+              href: 'https://buy.polar.sh/polar_cl_qnmZxboq1IDUJo03mk2Jue6ktqZrCXElnzH2s2xbV2R',
             },
             {
               label: 'Docusaurus',
@@ -146,6 +128,15 @@ module.exports = {
             {
               label: 'Privacy',
               href: '/privacy',
+            },
+          ],
+        },
+                {
+          title: 'Sponsors',
+          items: [
+            {
+              label: 'Merge Conflict',
+              href: 'https://www.mergeconflict.fm/',
             },
           ],
         },
@@ -174,13 +165,13 @@ module.exports = {
       '@docusaurus/preset-classic',
       {
         docs: {
-          sidebarPath: require.resolve('./sidebars.js'),
+          sidebarPath: './sidebars.js',
           editUrl: 'https://github.com/jandedobbeleer/oh-my-posh/edit/main/website/',
         },
         theme: {
           customCss: [
-            require.resolve('./src/css/prism-rose-pine-moon.css'),
-            require.resolve('./src/css/custom.css')
+            './src/css/prism-rose-pine-moon.css',
+            './src/css/custom.css'
           ],
         },
         blog: {

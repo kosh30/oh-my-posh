@@ -157,17 +157,12 @@ func TestRenderTemplate(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  tc.Context,
-		}
-
 		env := new(mock.Environment)
 		env.On("Shell").Return("foo")
 		Cache = new(cache.Template)
 		Init(env, nil, nil)
 
-		text, err := tmpl.Render()
+		text, err := Render(tc.Template, tc.Context)
 		if tc.ShouldError {
 			assert.Error(t, err)
 			continue
@@ -249,16 +244,13 @@ func TestRenderTemplateEnvVar(t *testing.T) {
 		}
 
 		Cache = &cache.Template{
-			OS: "darwin",
+			SimpleTemplate: cache.SimpleTemplate{
+				OS: "darwin",
+			},
 		}
 		Init(env, nil, nil)
 
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  tc.Context,
-		}
-
-		text, err := tmpl.Render()
+		text, err := Render(tc.Template, tc.Context)
 		if tc.ShouldError {
 			assert.Error(t, err)
 			continue
@@ -347,20 +339,22 @@ func TestPatchTemplate(t *testing.T) {
 	Init(env, nil, nil)
 
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context: map[string]any{
-				"OS":         true,
-				"World":      true,
-				"WorldTrend": "chaos",
-				"Working":    true,
-				"Staging":    true,
-				"CPU":        true,
-			},
+		context := map[string]any{
+			"OS":         true,
+			"World":      true,
+			"WorldTrend": "chaos",
+			"Working":    true,
+			"Staging":    true,
+			"CPU":        true,
+		}
+
+		tmpl := Text{
+			template: tc.Template,
+			context:  context,
 		}
 
 		tmpl.patchTemplate()
-		assert.Equal(t, tc.Expected, tmpl.Template, tc.Case)
+		assert.Equal(t, tc.Expected, tmpl.template, tc.Case)
 	}
 }
 
@@ -376,13 +370,13 @@ func TestPatchTemplateStruct(t *testing.T) {
 	Cache = new(cache.Template)
 	Init(env, nil, nil)
 
-	tmpl := &Text{
-		Template: "{{ .Hello }}",
-		Context:  Foo{},
+	tmpl := Text{
+		template: "{{ .Hello }}",
+		context:  Foo{},
 	}
 
 	tmpl.patchTemplate()
-	assert.Equal(t, "{{ .Data.Hello }}", tmpl.Template)
+	assert.Equal(t, "{{ .Data.Hello }}", tmpl.template)
 }
 
 func TestSegmentContains(t *testing.T) {
@@ -406,12 +400,7 @@ func TestSegmentContains(t *testing.T) {
 	Init(env, nil, nil)
 
 	for _, tc := range cases {
-		tmpl := &Text{
-			Template: tc.Template,
-			Context:  nil,
-		}
-
-		text, _ := tmpl.Render()
+		text, _ := Render(tc.Template, nil)
 		assert.Equal(t, tc.Expected, text, tc.Case)
 	}
 }

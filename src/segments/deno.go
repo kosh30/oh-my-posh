@@ -1,7 +1,7 @@
 package segments
 
 type Deno struct {
-	language
+	Language
 }
 
 func (d *Deno) Template() string {
@@ -10,14 +10,15 @@ func (d *Deno) Template() string {
 
 func (d *Deno) Enabled() bool {
 	d.extensions = []string{"*.js", "*.ts", "deno.json"}
-	d.commands = []*cmd{
-		{
+	d.tooling = map[string]*cmd{
+		"deno": {
 			executable: "deno",
 			args:       []string{"--version"},
 			regex:      `(?:(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
 		},
 	}
+	d.defaultTooling = []string{"deno"}
 	d.versionURLTemplate = "https://github.com/denoland/deno/releases/tag/v{{.Full}}"
 
-	return d.language.Enabled()
+	return d.Language.Enabled()
 }

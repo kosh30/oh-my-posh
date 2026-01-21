@@ -4,22 +4,22 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
 
 const (
-	StatusTemplate  properties.Property = "status_template"
-	StatusSeparator properties.Property = "status_separator"
+	StatusTemplate  options.Option = "status_template"
+	StatusSeparator options.Option = "status_separator"
 )
 
 type Status struct {
-	base
+	Base
 
-	template *template.Text
-	String   string
-	Meaning  string
-	Error    bool
+	String  string
+	Meaning string
+	Error   bool
 }
 
 func (s *Status) Template() string {
@@ -33,7 +33,7 @@ func (s *Status) Enabled() bool {
 	// Deprecated: Use {{ reason .Code }} instead
 	s.Meaning = template.GetReasonFromStatus(status)
 
-	if s.props.GetBool(properties.AlwaysEnabled, false) {
+	if s.options.Bool(options.AlwaysEnabled, false) {
 		return true
 	}
 
@@ -41,26 +41,23 @@ func (s *Status) Enabled() bool {
 }
 
 func (s *Status) formatStatus(status int, pipeStatus string) string {
-	statusTemplate := s.props.GetString(StatusTemplate, "{{ .Code }}")
-	s.template = &template.Text{
-		Template: statusTemplate,
-	}
+	statusTemplate := s.options.String(StatusTemplate, "{{ .Code }}")
 
 	if status != 0 {
 		s.Error = true
 	}
 
 	if pipeStatus == "" {
-		s.template.Context = s
-		if text, err := s.template.Render(); err == nil {
-			return text
+		if txt, err := template.Render(statusTemplate, s); err == nil {
+			return txt
 		}
+
 		return strconv.Itoa(status)
 	}
 
-	StatusSeparator := s.props.GetString(StatusSeparator, "|")
+	StatusSeparator := s.options.String(StatusSeparator, "|")
 
-	var builder strings.Builder
+	builder := text.NewBuilder()
 
 	// use an anaonymous struct to avoid
 	// confusion with the template context
@@ -71,11 +68,11 @@ func (s *Status) formatStatus(status int, pipeStatus string) string {
 
 	splitted := strings.Split(pipeStatus, " ")
 	for i, codeStr := range splitted {
-		write := func(text string) {
+		write := func(txt string) {
 			if i > 0 {
 				builder.WriteString(StatusSeparator)
 			}
-			builder.WriteString(text)
+			builder.WriteString(txt)
 		}
 
 		code, err := strconv.Atoi(codeStr)
@@ -90,14 +87,13 @@ func (s *Status) formatStatus(status int, pipeStatus string) string {
 
 		context.Code = code
 
-		s.template.Context = context
-		text, err := s.template.Render()
+		txt, err := template.Render(statusTemplate, context)
 		if err != nil {
 			write(codeStr)
 			continue
 		}
 
-		write(text)
+		write(txt)
 	}
 
 	return builder.String()

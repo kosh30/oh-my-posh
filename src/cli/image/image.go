@@ -65,7 +65,6 @@ const (
 	bg                  = "BG"
 	bc                  = "BC" // for base 16 colors
 	str                 = "STR"
-	url                 = "URL"
 	text                = "TEXT"
 	invertedColor       = "inverted"
 	invertedColorSingle = "invertedsingle"
@@ -135,11 +134,9 @@ type Renderer struct {
 }
 
 func (ir *Renderer) Init(env runtime.Environment) error {
-	ir.setOutputPath(env.Flags().Config)
+	ir.setOutputPath(env.Flags().ConfigPath)
 
 	ir.cleanContent()
-
-	font_.SetCache(env.Cache())
 
 	if err := ir.loadFonts(); err != nil {
 		return err

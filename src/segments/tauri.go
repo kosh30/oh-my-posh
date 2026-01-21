@@ -5,7 +5,7 @@ import (
 )
 
 type Tauri struct {
-	language
+	Language
 }
 
 func (t *Tauri) Template() string {
@@ -15,15 +15,16 @@ func (t *Tauri) Template() string {
 func (t *Tauri) Enabled() bool {
 	t.extensions = []string{"tauri.conf.json"}
 	t.folders = []string{"src-tauri"}
-	t.commands = []*cmd{
-		{
+	t.tooling = map[string]*cmd{
+		"tauri": {
 			regex:      `(?:(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
 			getVersion: t.getVersion,
 		},
 	}
+	t.defaultTooling = []string{"tauri"}
 	t.versionURLTemplate = "https://github.com/tauri-apps/tauri/releases/tag/tauri-v{{.Full}}"
 
-	return t.language.Enabled()
+	return t.Language.Enabled()
 }
 
 func (t *Tauri) getVersion() (string, error) {

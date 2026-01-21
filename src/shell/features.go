@@ -1,14 +1,11 @@
 package shell
 
-import (
-	"strconv"
-	"strings"
-)
+import "fmt"
 
-type Feature byte
+type Features uint
 
 const (
-	Jobs Feature = iota
+	Jobs Features = 1 << iota
 	Azure
 	PoshGit
 	LineError
@@ -23,16 +20,44 @@ const (
 	Async
 )
 
-type Features []Feature
+// getAllFeatures returns all defined feature flags by iterating through bit positions
+func getAllFeatures() []Features {
+	var features []Features
+
+	// Iterate through all possible bit positions
+	for i := range uint(32) { // 32 should be more than enough for our features
+		feature := Features(1 << i)
+
+		// Stop when we reach a power of 2 greater than our highest defined feature
+		if feature > Async*2 {
+			break
+		}
+
+		// Add the feature if it's a power of 2 (valid feature flag)
+		if feature != 0 && (feature&(feature-1)) == 0 {
+			features = append(features, feature)
+		}
+	}
+
+	return features
+}
 
 func (f Features) Lines(shell string) Lines {
 	var lines Lines
 
-	for _, feature := range f {
+	// Get all features dynamically
+	allFeatures := getAllFeatures()
+
+	for _, feature := range allFeatures {
+		// Check if this feature is enabled in the Features bitmask
+		if uint(f)&uint(feature) == 0 {
+			continue
+		}
+
 		var code Code
 
 		switch shell {
-		case PWSH, PWSH5:
+		case PWSH:
 			code = feature.Pwsh()
 		case ZSH:
 			code = feature.Zsh()
@@ -58,12 +83,6 @@ func (f Features) Lines(shell string) Lines {
 	return lines
 }
 
-func (f Features) Hash() string {
-	var sb strings.Builder
-
-	for _, feature := range f {
-		sb.WriteString(strconv.Itoa(int(feature)))
-	}
-
-	return sb.String()
+func (f Features) String() string {
+	return fmt.Sprintf("%b", uint(f))
 }

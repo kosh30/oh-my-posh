@@ -6,7 +6,7 @@ sidebar_label: Git
 
 ## What
 
-Display git information when in a git repository. Also works for subfolders. For maximum compatibility,
+Display git information when in a [Git][git] repository. Also works for subfolders. For maximum compatibility,
 make sure your `git` executable is up-to-date (when branch or status information is incorrect for example).
 
 ## Sample Configuration
@@ -28,7 +28,7 @@ import Config from "@site/src/components/Config.js";
     ],
     template:
       "{{ .UpstreamIcon }}{{ .HEAD }}{{if .BranchStatus }} {{ .BranchStatus }}{{ end }}{{ if .Working.Changed }} \uF044 {{ .Working.String }}{{ end }}{{ if and (.Working.Changed) (.Staging.Changed) }} |{{ end }}{{ if .Staging.Changed }} \uF046 {{ .Staging.String }}{{ end }}{{ if gt .StashCount 0 }} \uf0c7 {{ .StashCount }}{{ end }}",
-    properties: {
+    options: {
       fetch_status: true,
       fetch_upstream_icon: true,
       untracked_modes: {
@@ -43,27 +43,29 @@ import Config from "@site/src/components/Config.js";
   }}
 />
 
-## Properties
+## Options
 
 ### Fetching information
 
 As doing multiple git calls can slow down the prompt experience, we do not fetch information by default.
-You can set the following properties to `true` to enable fetching additional information (and populate the template).
+You can set the following options to `true` to enable fetching additional information (and populate the template).
 
 | Name                  |        Type         | Default | Description                                                                                                                                                                                                                                                                                                                           |
 | --------------------- | :-----------------: | :-----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `fetch_status`        |      `boolean`      | `false` | fetch the local changes                                                                                                                                                                                                                                                                                                               |
+| `fetch_push_status`   |      `boolean`      | `false` | fetch the push-remote ahead/behind information. Requires `fetch_status` to be enabled                                                                                                                                                                                                                                                 |
 | `ignore_status`       |     `[]string`      |         | do not fetch status for these repo's. Uses the repo's root folder and same logic as the [exclude_folders][exclude_folders] property                                                                                                                                                                                                   |
 | `fetch_upstream_icon` |      `boolean`      | `false` | fetch upstream icon                                                                                                                                                                                                                                                                                                                   |
 | `fetch_bare_info`     |      `boolean`      | `false` | fetch bare repo info                                                                                                                                                                                                                                                                                                                  |
+| `fetch_user`          |   [`User`](#user)   | `false` | fetch the current configured user for the repository                                                                                                                                                                                                                                                                                  |
 | `untracked_modes`     | `map[string]string` |         | map of repo's where to override the default [untracked files mode][untracked]:<ul><li>`no`</li><li>`normal`</li><li>`all`</li></ul>For example `"untracked_modes": { "/Users/me/repos/repo1": "no" }` - defaults to `normal` for all repo's. If you want to override for all repo's, use `*` to set the mode instead of the repo path |
 | `ignore_submodules`   | `map[string]string` |         | map of repo's where to change the [--ignore-submodules][submodules] flag (`none`, `untracked`, `dirty` or `all`). For example `"ignore_submodules": { "/Users/me/repos/repo1": "all" }`. If you want to override for all repo's, use `*` to set the mode instead of the repo path                                                     |
 | `native_fallback`     |      `boolean`      | `false` | when set to `true` and `git.exe` is not available when inside a WSL2 shared Windows drive, we will fallback to the native `git` executable to fetch data. Not all information can be displayed in this case                                                                                                                           |
-| `fetch_user`          |   [`User`](#user)   | `false` | fetch the current configured user for the repository                                                                                                                                                                                                                                                                                  |
 | `status_formats`      | `map[string]string` |         | a key, value map allowing to override how individual status items are displayed. For example, `"status_formats": { "Added": "Added: %d" }` will display the added count as `Added: 1` instead of `+1`. See the [Status](#status) section for available overrides.                                                                     |
 | `source`              |      `string`       |  `cli`  | <ul><li>`cli`: fetch the information using the git CLI</li><li>`pwsh`: fetch the information from the [posh-git][poshgit] PowerShell Module</li></ul>                                                                                                                                                                                 |
 | `mapped_branches`     |      `object`       |         | custom glyph/text for specific branches. You can use `*` at the end as a wildcard character for matching                                                                                                                                                                                                                              |
 | `branch_template`     |      `string`       |         | a [template][templates] to format that branch name. You can use `{{ .Branch }}` as reference to the original branch name                                                                                                                                                                                                              |
+| `disable_with_jj`     |      `boolean`      | `false` | disable the git segment in case of a [Jujutsu] collocated repository                                                                                                                                                                                                                                                                  |
 
 ### Icons
 
@@ -93,8 +95,8 @@ You can set the following properties to `true` to enable fetching additional inf
 
 | Name                |        Type         | Default  | Description                                                                                                                                                                  |
 | ------------------- | :-----------------: | :------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `github_icon`       |      `string`       | `\uF408` | icon/text to display when the upstream is Github                                                                                                                             |
-| `gitlab_icon`       |      `string`       | `\uF296` | icon/text to display when the upstream is Gitlab                                                                                                                             |
+| `github_icon`       |      `string`       | `\uF408` | icon/text to display when the upstream is GitHub                                                                                                                             |
+| `gitlab_icon`       |      `string`       | `\uF296` | icon/text to display when the upstream is GitLab                                                                                                                             |
 | `bitbucket_icon`    |      `string`       | `\uF171` | icon/text to display when the upstream is Bitbucket                                                                                                                          |
 | `azure_devops_icon` |      `string`       | `\uEBE8` | icon/text to display when the upstream is Azure DevOps                                                                                                                       |
 | `codecommit_icon`   |      `string`       | `\uF270` | icon/text to display when the upstream is AWS CodeCommit                                                                                                                     |
@@ -123,6 +125,8 @@ You can set the following properties to `true` to enable fetching additional inf
 | `.Ref`           | `string`  | the current HEAD reference (branch/tag/...)                                                                                      |
 | `.Behind`        | `int`     | commits behind of upstream                                                                                                       |
 | `.Ahead`         | `int`     | commits ahead of upstream                                                                                                        |
+| `.PushBehind`    | `int`     | commits behind of push remote                                                                                                    |
+| `.PushAhead`     | `int`     | commits ahead of push remote                                                                                                     |
 | `.BranchStatus`  | `string`  | the current branch context (ahead/behind string representation)                                                                  |
 | `.Upstream`      | `string`  | the upstream name (remote)                                                                                                       |
 | `.UpstreamGone`  | `boolean` | whether the upstream is gone (no remote)                                                                                         |
@@ -228,6 +232,7 @@ You can then use the `POSH_GIT_STRING` environment variable in a [text segment][
   }}
 />
 
+[git]: https://git-scm.com/
 [poshgit]: https://github.com/dahlbyk/posh-git
 [templates]: /docs/configuration/templates
 [hyperlinks]: /docs/configuration/templates#custom
@@ -236,3 +241,4 @@ You can then use the `POSH_GIT_STRING` environment variable in a [text segment][
 [kraken-ref]: https://www.gitkraken.com/invite/nQmDPR9D
 [text]: /docs/segments/system/text
 [exclude_folders]: /docs/configuration/segment#include--exclude-folders
+[Jujutsu]: https://www.jj-vcs.dev/

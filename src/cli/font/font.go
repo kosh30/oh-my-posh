@@ -4,6 +4,7 @@ package font
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"path"
 	"strings"
@@ -11,13 +12,56 @@ import (
 	"github.com/ConradIrwin/font/sfnt"
 )
 
+func init() {
+	gob.Register([]*Font{})
+	gob.Register([]*Asset{})
+}
+
 // Font describes a font file and the various metadata associated with it.
 type Font struct {
-	Name     string
-	Family   string
-	FileName string
-	Metadata map[sfnt.NameID]string
-	Data     []byte
+	Name     string                 `json:"name,omitempty" jsonschema:"title=Font name,description=The name of the font"`
+	Family   string                 `json:"-"`
+	FileName string                 `json:"-"`
+	Metadata map[sfnt.NameID]string `json:"-"`
+	Data     []byte                 `json:"-"`
+}
+
+func (f *Font) Apply() error {
+	_, err := downloadAndInstall(f.Name, "")
+	return err
+}
+
+// downloadAndInstall resolves a font by name or URL, downloads it, and installs it.
+// It returns the resolved font name and any error encountered.
+func downloadAndInstall(font, zipFolder string) (string, error) {
+	asset, err := ResolveFontAsset(font)
+	if err != nil {
+		return "", err
+	}
+
+	if asset.Folder != "" && zipFolder == "" {
+		zipFolder = asset.Folder
+	}
+
+	zipFile, err := Download(asset.URL)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = InstallZIP(zipFile, zipFolder)
+	return asset.Name, err
+}
+
+func (f *Font) Equal(font *Font) bool {
+	if font == nil {
+		return false
+	}
+
+	return f.Name == font.Name
+}
+
+func (f *Font) Resolve() (*Font, bool) {
+	return nil, false
 }
 
 // fontExtensions is a list of file extensions that denote fonts.

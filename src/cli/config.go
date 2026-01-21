@@ -3,8 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
-	"time"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/dsc"
 	"github.com/spf13/cobra"
 )
 
@@ -16,10 +18,7 @@ var configCmd = &cobra.Command{
 
 You can export, migrate or edit the config (via the editor specified in the environment variable "EDITOR").`,
 	ValidArgs: []string{
-		"export",
-		"migrate",
 		"edit",
-		"get",
 	},
 	Args: NoArgsOrOneValidArg,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -30,10 +29,14 @@ You can export, migrate or edit the config (via the editor specified in the envi
 
 		switch args[0] {
 		case "edit":
-			exitcode = editFileWithEditor(os.Getenv("POSH_THEME"))
-		case "get":
-			// only here for backwards compatibility
-			fmt.Print(time.Now().UnixNano() / 1000000)
+			cache.Init(os.Getenv("POSH_SHELL"))
+			if configPath, OK := cache.Get[string](cache.Session, config.SourceKey); OK {
+				exitcode = editFileWithEditor(configPath)
+				return
+			}
+
+			fmt.Println("no config found in session cache")
+			exitcode = 666
 		default:
 			_ = cmd.Help()
 		}
@@ -41,5 +44,6 @@ You can export, migrate or edit the config (via the editor specified in the envi
 }
 
 func init() {
+	configCmd.AddCommand(dsc.Command(config.DSC()))
 	RootCmd.AddCommand(configCmd)
 }

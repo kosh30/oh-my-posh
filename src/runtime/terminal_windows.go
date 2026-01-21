@@ -97,6 +97,13 @@ func (term *Terminal) TerminalWidth() (int, error) {
 
 	term.CmdFlags.TerminalWidth = int(info.Size.X)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
+
+	// Claude CLI has a 2 character padding on both sides
+	if term.CmdFlags.Shell == "claude" {
+		log.Debug("adjusting terminal width for Claude CLI")
+		term.CmdFlags.TerminalWidth -= 4
+	}
+
 	return term.CmdFlags.TerminalWidth, nil
 }
 
@@ -114,7 +121,7 @@ func (term *Terminal) Platform() string {
 //
 // Returns a variant type if successful; nil and an error if not.
 func (term *Terminal) WindowsRegistryKeyValue(input string) (*WindowsRegistryValue, error) {
-	log.Trace(time.Now(), input)
+	defer log.Trace(time.Now(), input)
 
 	// Format:
 	// "HKLM\Software\Microsoft\Windows NT\CurrentVersion\EditionID"

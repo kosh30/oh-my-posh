@@ -206,7 +206,7 @@ func (term *Terminal) getConnections() []*Connection {
 }
 
 func (term *Terminal) wifiNetwork() (*Connection, error) {
-	log.Trace(time.Now())
+	defer log.Trace(time.Now())
 	// Open handle
 	var pdwNegotiatedVersion uint32
 	var phClientHandle uint32
@@ -230,7 +230,7 @@ func (term *Terminal) wifiNetwork() (*Connection, error) {
 	numberOfInterfaces := int(interfaceList.dwNumberOfItems)
 	infoSize := unsafe.Sizeof(interfaceList.InterfaceInfo[0])
 	for i := range numberOfInterfaces {
-		network := (*WLAN_INTERFACE_INFO)(unsafe.Pointer(uintptr(unsafe.Pointer(&interfaceList.InterfaceInfo[0])) + uintptr(i)*infoSize))
+		network := (*WLAN_INTERFACE_INFO)(unsafe.Add(unsafe.Pointer(&interfaceList.InterfaceInfo[0]), uintptr(i)*infoSize))
 		if network.isState != 1 {
 			log.Debug("Skipping non-connected wifi interface")
 			continue

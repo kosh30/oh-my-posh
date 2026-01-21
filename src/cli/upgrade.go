@@ -5,20 +5,22 @@ import (
 	"os"
 	stdruntime "runtime"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 	"github.com/spf13/cobra"
 )
 
 var (
 	force bool
+	auto  bool
 )
 
 // upgradeCmd represents the upgrade command
@@ -33,6 +35,13 @@ var upgradeCmd = &cobra.Command{
 		if debug {
 			startTime = time.Now()
 			log.Enable(plain)
+		}
+
+		if upgrade.IsPackagedInstallation() {
+			msg := "upgrade is not supported when installed as a MSIX package"
+			log.Debug(msg)
+			fmt.Printf("\n  ❌ %s\n\n", msg)
+			return
 		}
 
 		supportedPlatforms := []string{
@@ -50,35 +59,42 @@ var upgradeCmd = &cobra.Command{
 
 		env := &runtime.Terminal{}
 		env.Init(&runtime.Flags{
-			Debug:     debug,
-			SaveCache: true,
+			Debug: debug,
 		})
+
+		cache.Init(sh, cache.Persist)
+
+		// Only respect the cache interval when using --auto flag
+		if _, OK := cache.Get[string](cache.Device, upgrade.CACHEKEY); OK && auto {
+			log.Debug("upgrade check already performed recently, skipping")
+			return
+		}
 
 		terminal.Init(sh)
 		fmt.Print(terminal.StartProgress())
 
-		cfg, _ := config.Load(configFlag, sh, false)
+		cfg := config.Get(configFlag, false)
 
 		defer func() {
 			fmt.Print(terminal.StopProgress())
 
-			// always reset the cache key so we respect the interval no matter what the outcome
-			env.Cache().Set(upgrade.CACHEKEY, "", cfg.Upgrade.Interval)
+			// Set the cache key after any upgrade check to prevent redundant checks
+			cache.Set(cache.Device, upgrade.CACHEKEY, "true", cfg.Upgrade.Interval)
 
-			env.Close()
+			cache.Close()
 
 			if !debug {
 				return
 			}
 
-			var builder strings.Builder
+			sb := text.NewBuilder()
 
-			builder.WriteString(fmt.Sprintf("%s %s\n", log.Text("Upgrade duration:").Green().Bold().Plain(), time.Since(startTime)))
+			sb.WriteString(fmt.Sprintf("%s %s\n", log.Text("Upgrade duration:").Green().Bold().Plain(), time.Since(startTime)))
 
-			builder.WriteString(log.Text("\nLogs:\n\n").Green().Bold().Plain().String())
-			builder.WriteString(env.Logs())
+			sb.WriteString(log.Text("\nLogs:\n\n").Green().Bold().Plain().String())
+			sb.WriteString(env.Logs())
 
-			fmt.Println(builder.String())
+			fmt.Println(sb.String())
 		}()
 
 		latest, err := cfg.Upgrade.FetchLatest()
@@ -90,6 +106,8 @@ var upgradeCmd = &cobra.Command{
 			exitcode = 1
 			return
 		}
+
+		log.Debugf("current version: v%s, latest version: v%s", build.Version, latest)
 
 		if force {
 			log.Debug("forced upgrade")
@@ -105,9 +123,12 @@ var upgradeCmd = &cobra.Command{
 		}
 
 		if build.Version != latest {
+			log.Debug("upgrade available")
 			exitcode = executeUpgrade(cfg.Upgrade)
 			return
 		}
+
+		log.Debug("already on the latest version")
 	},
 }
 
@@ -125,6 +146,7 @@ func executeUpgrade(cfg *upgrade.Config) int {
 
 func init() {
 	upgradeCmd.Flags().BoolVarP(&force, "force", "f", false, "force the upgrade even if the version is up to date")
+	upgradeCmd.Flags().BoolVar(&auto, "auto", false, "respect the cache interval for automatic upgrades")
 	upgradeCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
 	RootCmd.AddCommand(upgradeCmd)
 }

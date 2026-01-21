@@ -3,8 +3,10 @@ package prompt
 import (
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/color"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
+	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/regex"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
@@ -22,9 +24,9 @@ type Engine struct {
 	rprompt               string
 	Overflow              config.Overflow
 	prompt                strings.Builder
-	currentLineLength     int
 	rpromptLength         int
 	Padding               int
+	currentLineLength     int
 	Plain                 bool
 	forceRender           bool
 }
@@ -41,14 +43,18 @@ const (
 	PREVIEW   = "preview"
 )
 
-func (e *Engine) write(text string) {
-	e.prompt.WriteString(text)
+func (e *Engine) write(txt string) {
+	// Grow capacity proactively if needed
+	if e.prompt.Cap() < e.prompt.Len()+len(txt) {
+		e.prompt.Grow(len(txt) * 2) // Grow by double the needed size to reduce future allocations
+	}
+	e.prompt.WriteString(txt)
 }
 
 func (e *Engine) string() string {
-	text := e.prompt.String()
+	txt := e.prompt.String()
 	e.prompt.Reset()
-	return text
+	return txt
 }
 
 func (e *Engine) canWriteRightBlock(length int, rprompt bool) (int, bool) {
@@ -104,13 +110,14 @@ func (e *Engine) pwd() {
 	}
 
 	// Allow template logic to define when to enable the PWD (when supported)
-	tmpl := &template.Text{
-		Template: e.Config.PWD,
-	}
-
-	pwdType, err := tmpl.Render()
+	pwdType, err := template.Render(e.Config.PWD, nil)
 	if err != nil || pwdType == "" {
 		return
+	}
+
+	// Convert to Windows path when in WSL
+	if e.Env.IsWsl() {
+		pwd = e.Env.ConvertToWindowsPath(pwd)
 	}
 
 	user := e.Env.User()
@@ -151,16 +158,18 @@ func (e *Engine) isIterm() bool {
 
 func (e *Engine) shouldFill(filler string, padLength int) (string, bool) {
 	if filler == "" {
+		log.Debug("no filler specified")
 		return "", false
 	}
 
-	tmpl := &template.Text{
-		Template: filler,
-		Context:  e,
-	}
+	e.Padding = padLength
+
+	defer func() {
+		e.Padding = 0
+	}()
 
 	var err error
-	if filler, err = tmpl.Render(); err != nil {
+	if filler, err = template.Render(filler, e); err != nil {
 		return "", false
 	}
 
@@ -169,34 +178,36 @@ func (e *Engine) shouldFill(filler string, padLength int) (string, bool) {
 	terminal.Write("", "", filler)
 	filler, lenFiller := terminal.String()
 	if lenFiller == 0 {
+		log.Debug("filler has no length")
 		return "", false
 	}
 
 	repeat := padLength / lenFiller
 	unfilled := padLength % lenFiller
-	text := strings.Repeat(filler, repeat) + strings.Repeat(" ", unfilled)
-	return text, true
+	txt := strings.Repeat(filler, repeat) + strings.Repeat(" ", unfilled)
+	log.Debug("filling with", txt)
+	return txt, true
 }
 
 func (e *Engine) getTitleTemplateText() string {
-	tmpl := &template.Text{
-		Template: e.Config.ConsoleTitleTemplate,
+	if txt, err := template.Render(e.Config.ConsoleTitleTemplate, nil); err == nil {
+		return txt
 	}
-	if text, err := tmpl.Render(); err == nil {
-		return text
-	}
+
 	return ""
 }
 
 func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
-	text, length := e.writeBlockSegments(block)
+	blockText, length := e.writeBlockSegments(block)
 
 	// do not print anything when we don't have any text unless forced
 	if !block.Force && length == 0 {
 		return false
 	}
 
-	defer e.applyPowerShellBleedPatch()
+	defer func() {
+		e.applyPowerShellBleedPatch()
+	}()
 
 	// do not print a newline to avoid a leading space
 	// when we're printing the first primary prompt in
@@ -209,7 +220,7 @@ func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
 	case config.Prompt:
 		if block.Alignment == config.Left {
 			e.currentLineLength += length
-			e.write(text)
+			e.write(blockText)
 			return true
 		}
 
@@ -222,12 +233,13 @@ func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
 		// we can't print the right block as there's not enough room available
 		if !OK {
 			e.Overflow = block.Overflow
-			switch block.Overflow {
+
+			switch e.Overflow {
 			case config.Break:
 				e.writeNewline()
 			case config.Hide:
 				// make sure to fill if needed
-				if padText, OK := e.shouldFill(block.Filler, space+length); OK {
+				if padText, OK := e.shouldFill(block.Filler, space+length-e.currentLineLength); OK {
 					e.write(padText)
 				}
 
@@ -244,7 +256,7 @@ func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
 		// validate if we have a filler and fill if needed
 		if padText, OK := e.shouldFill(block.Filler, space); OK {
 			e.write(padText)
-			e.write(text)
+			e.write(blockText)
 			return true
 		}
 
@@ -252,9 +264,9 @@ func (e *Engine) renderBlock(block *config.Block, cancelNewline bool) bool {
 			e.write(strings.Repeat(" ", space))
 		}
 
-		e.write(text)
+		e.write(blockText)
 	case config.RPrompt:
-		e.rprompt = text
+		e.rprompt = blockText
 		e.rpromptLength = length
 	}
 
@@ -266,7 +278,7 @@ func (e *Engine) applyPowerShellBleedPatch() {
 	// to avoid the background being printed on the next line
 	// when at the end of the buffer.
 	// See https://github.com/JanDeDobbeleer/oh-my-posh/issues/65
-	if e.Env.Shell() != shell.PWSH && e.Env.Shell() != shell.PWSH5 {
+	if e.Env.Shell() != shell.PWSH {
 		return
 	}
 
@@ -422,11 +434,16 @@ func (e *Engine) adjustTrailingDiamondColorOverrides() {
 		return
 	}
 
-	if !strings.Contains(e.previousActiveSegment.TrailingDiamond, string(color.Background)) && !strings.Contains(e.previousActiveSegment.TrailingDiamond, string(color.Foreground)) {
+	trailingDiamond := e.previousActiveSegment.TrailingDiamond
+	// Optimize: check both conditions in a single pass
+	hasBg := strings.Contains(trailingDiamond, string(color.Background))
+	hasFg := strings.Contains(trailingDiamond, string(color.Foreground))
+
+	if !hasBg && !hasFg {
 		return
 	}
 
-	match := regex.FindNamedRegexMatch(terminal.AnchorRegex, e.previousActiveSegment.TrailingDiamond)
+	match := regex.FindNamedRegexMatch(terminal.AnchorRegex, trailingDiamond)
 	if len(match) == 0 {
 		return
 	}
@@ -472,10 +489,11 @@ func (e *Engine) rectifyTerminalWidth(diff int) {
 // given configuration options, and is ready to print any
 // of the prompt components.
 func New(flags *runtime.Flags) *Engine {
-	cfg, _ := config.Load(flags.Config, flags.Shell, flags.Migrate)
-
 	env := &runtime.Terminal{}
 	env.Init(flags)
+
+	reload, _ := cache.Get[bool](cache.Device, config.RELOAD)
+	cfg := config.Get(flags.ConfigPath, reload)
 
 	template.Init(env, cfg.Var, cfg.Maps)
 
@@ -501,7 +519,11 @@ func New(flags *runtime.Flags) *Engine {
 		Env:         env,
 		Plain:       flags.Plain,
 		forceRender: flags.Force || len(env.Getenv("POSH_FORCE_RENDER")) > 0,
+		prompt:      strings.Builder{},
 	}
+
+	// Pre-allocate prompt builder capacity to reduce allocations during rendering
+	eng.prompt.Grow(512) // Start with 512 bytes capacity, will grow as needed
 
 	switch env.Shell() {
 	case shell.XONSH:
@@ -518,7 +540,7 @@ func New(flags *runtime.Flags) *Engine {
 			diff = -2
 		}
 		eng.rectifyTerminalWidth(diff)
-	case shell.PWSH, shell.PWSH5:
+	case shell.PWSH:
 		// when in PowerShell, and force patching the bleed bug
 		// we need to reduce the terminal width by 1 so the last
 		// character isn't cut off by the ANSI escape sequences

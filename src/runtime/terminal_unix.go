@@ -10,8 +10,8 @@ import (
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
-	"github.com/shirou/gopsutil/v3/host"
-	mem "github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v4/host"
+	mem "github.com/shirou/gopsutil/v4/mem"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
 	"golang.org/x/sys/unix"
 )
@@ -28,18 +28,16 @@ func (term *Terminal) QueryWindowTitles(_, _ string) (string, error) {
 func (term *Terminal) IsWsl() bool {
 	defer log.Trace(time.Now())
 	const key = "is_wsl"
-	if val, found := term.Cache().Get(key); found {
-		log.Debug(val)
-		return val == "true"
+	if val, found := cache.Get[bool](cache.Device, key); found {
+		return val
 	}
 
 	var val bool
 	defer func() {
-		term.Cache().Set(key, strconv.FormatBool(val), cache.INFINITE)
+		cache.Set(cache.Device, key, val, cache.INFINITE)
 	}()
 
 	val = term.HasCommand("wslpath")
-	log.Debug(strconv.FormatBool(val))
 
 	return val
 }
@@ -83,23 +81,30 @@ func (term *Terminal) TerminalWidth() (int, error) {
 
 	term.CmdFlags.TerminalWidth = int(width)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
+
+	// Claude CLI has a 2 character padding on both sides
+	if term.CmdFlags.Shell == "claude" {
+		log.Debug("adjusting terminal width for Claude CLI")
+		term.CmdFlags.TerminalWidth -= 4
+	}
+
 	return term.CmdFlags.TerminalWidth, err
 }
 
 func (term *Terminal) Platform() string {
 	const key = "environment_platform"
-	if val, found := term.Cache().Get(key); found {
-		log.Debug(val)
+	if val, found := cache.Get[string](cache.Device, key); found {
 		return val
 	}
 
 	var platform string
 	defer func() {
-		term.Cache().Set(key, platform, cache.INFINITE)
+		cache.Set(cache.Device, key, platform, cache.INFINITE)
 	}()
 
 	if wsl := term.Getenv("WSL_DISTRO_NAME"); len(wsl) != 0 {
-		platform = strings.Split(strings.ToLower(wsl), "-")[0]
+		platform, _, _ := strings.Cut(wsl, "-")
+		platform = strings.ToLower(platform)
 		log.Debug(platform)
 		return platform
 	}
@@ -165,14 +170,24 @@ func (term *Terminal) Memory() (*Memory, error) {
 		log.Error(err)
 		return nil, err
 	}
+
 	m.PhysicalTotalMemory = memStat.Total
 	m.PhysicalAvailableMemory = memStat.Available
 	m.PhysicalFreeMemory = memStat.Free
-	m.PhysicalPercentUsed = memStat.UsedPercent
+
+	if memStat.Total > 0 {
+		used := float64(memStat.Total) - float64(memStat.Available)
+		if used < 0 {
+			used = 0
+		}
+		m.PhysicalPercentUsed = used / float64(memStat.Total) * 100
+	}
+
 	swapStat, err := mem.SwapMemory()
 	if err != nil {
 		log.Error(err)
 	}
+
 	m.SwapTotalMemory = swapStat.Total
 	m.SwapFreeMemory = swapStat.Free
 	m.SwapPercentUsed = swapStat.UsedPercent

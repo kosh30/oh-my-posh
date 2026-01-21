@@ -1,7 +1,7 @@
 package segments
 
 type Nim struct {
-	language
+	Language
 }
 
 func (n *Nim) Template() string {
@@ -11,12 +11,13 @@ func (n *Nim) Template() string {
 func (n *Nim) Enabled() bool {
 	n.extensions = []string{"*.nim", "*.nims"}
 
-	n.commands = []*cmd{
-		{
+	n.tooling = map[string]*cmd{
+		"nim": {
 			executable: "nim",
 			args:       []string{"--version"},
 			regex:      `Nim Compiler Version (?P<version>(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+))`,
 		},
 	}
-	return n.language.Enabled()
+	n.defaultTooling = []string{"nim"}
+	return n.Language.Enabled()
 }

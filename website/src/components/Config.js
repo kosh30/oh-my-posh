@@ -3,11 +3,11 @@ import CodeBlock from '@theme/CodeBlock';
 import Tabs from "@theme/Tabs";
 import TabItem from "@theme/TabItem";
 import YAML from 'yaml';
-import TOML from '@iarna/toml';
+import TOML from 'smol-toml';
 
 function Config(props) {
 
-  const {data} = props;
+  const { data, metastring = { json: "", yaml: "", toml: "" } } = props;
 
   const patchTomlData = () => {
     if (data?.properties) {
@@ -38,17 +38,17 @@ function Config(props) {
         ]
       }>
       <TabItem value="json">
-        <CodeBlock className="language-json">
+        <CodeBlock language="json" metastring={metastring.json}>
           {JSON.stringify(data, null, 2)}
         </CodeBlock>
       </TabItem>
       <TabItem value="yaml">
-        <CodeBlock className="language-yaml">
+        <CodeBlock language="yaml" metastring={metastring.yaml}>
           {YAML.stringify(data)}
         </CodeBlock>
       </TabItem>
       <TabItem value="toml">
-        <CodeBlock className="language-toml">
+        <CodeBlock language="toml" metastring={metastring.toml}>
           {TOML.stringify(patchTomlData())}
         </CodeBlock>
       </TabItem>

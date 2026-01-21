@@ -5,18 +5,18 @@ import (
 
 	"net/http"
 
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 )
 
 type HTTP struct {
-	base
+	Base
 
 	Body map[string]any
 }
 
 const (
-	METHOD properties.Property = "method"
+	METHOD options.Option = "method"
 )
 
 func (h *HTTP) Template() string {
@@ -24,18 +24,14 @@ func (h *HTTP) Template() string {
 }
 
 func (h *HTTP) Enabled() bool {
-	url := h.props.GetString(URL, "")
+	url := h.options.String(URL, "")
 	if url == "" {
 		return false
 	}
 
-	method := h.props.GetString(METHOD, "GET")
+	method := h.options.String(METHOD, "GET")
 
-	tmpl := &template.Text{
-		Template: url,
-	}
-
-	if resolved, err := tmpl.Render(); err == nil {
+	if resolved, err := template.Render(url, nil); err == nil {
 		url = resolved
 	}
 

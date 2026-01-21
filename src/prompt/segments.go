@@ -66,14 +66,12 @@ func (e *Engine) writeSegmentsWithPool(segments []*config.Segment, out chan resu
 
 	// Start worker pool
 	for range workerPoolSize {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for task := range tasks {
 				task.segment.Execute(e.Env)
 				out <- task
 			}
-		}()
+		})
 	}
 
 	// Send tasks to workers
@@ -96,6 +94,7 @@ func (e *Engine) writeSegments(out chan result, block *config.Block) {
 	current := 0
 	executedCount := 0
 	results := make([]*config.Segment, count)
+	// Pre-allocate map with known capacity to reduce allocations
 	executed := make(map[string]bool, count)
 	segmentIndex := 0
 

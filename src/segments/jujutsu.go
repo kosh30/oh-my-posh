@@ -1,20 +1,23 @@
 package segments
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
-	"github.com/jandedobbeleer/oh-my-posh/src/properties"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
+	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 )
 
 const (
 	JUJUTSUCOMMAND = "jj"
 
-	jjLogTemplate = `change_id.shortest() ++ "\n" ++ diff.summary()`
-
-	IgnoreWorkingCopy properties.Property = "ignore_working_copy"
+	IgnoreWorkingCopy options.Option = "ignore_working_copy"
+	ChangeIDMinLen    options.Option = "change_id_min_len"
+	FetchAhead        options.Option = "fetch_ahead_counter"
+	AheadIcon         options.Option = "ahead_icon"
 )
 
 type JujutsuStatus struct {
@@ -37,7 +40,7 @@ func (s *JujutsuStatus) add(code byte) {
 type Jujutsu struct {
 	Working  *JujutsuStatus
 	ChangeID string
-	scm
+	Scm
 }
 
 func (jj *Jujutsu) Template() string {
@@ -45,13 +48,13 @@ func (jj *Jujutsu) Template() string {
 }
 
 func (jj *Jujutsu) Enabled() bool {
-	displayStatus := jj.props.GetBool(FetchStatus, false)
+	displayStatus := jj.options.Bool(FetchStatus, false)
 
 	if !jj.shouldDisplay(displayStatus) {
 		return false
 	}
 
-	statusFormats := jj.props.GetKeyValueMap(StatusFormats, map[string]string{})
+	statusFormats := jj.options.KeyValueMap(StatusFormats, map[string]string{})
 	jj.Working = &JujutsuStatus{ScmStatus: ScmStatus{Formats: statusFormats}}
 
 	if displayStatus {
@@ -68,6 +71,54 @@ func (jj *Jujutsu) CacheKey() (string, bool) {
 	}
 
 	return dir.Path, true
+}
+
+func (jj *Jujutsu) ClosestBookmarks() string {
+	statusString, err := jj.getJujutsuCommandOutput("log", "-r", "heads(::@ & bookmarks())", "--no-graph", "-T", "bookmarks")
+	if err != nil {
+		return ""
+	}
+
+	lines := strings.Split(statusString, "\n")
+
+	if !jj.options.Bool(FetchAhead, false) || len(lines[0]) == 0 {
+		return lines[0]
+	}
+
+	aheadIcon := jj.options.String(AheadIcon, "\u21e1")
+	marks := strings.Split(lines[0], " ")
+	// String to return for status
+	var endString strings.Builder
+
+	// Closest bookmarks are all the same distance away from the working copy
+	// so retrieve the distance to the first one and use it for all of them
+
+	rangeString := strings.Trim(marks[0], "*") + "..@"
+
+	aheadString, err := jj.getJujutsuCommandOutput("log", "--no-graph", "-T", "'.'", "-r", rangeString)
+	if err != nil {
+		return lines[0]
+	}
+
+	aheadCounter := len(aheadString)
+	aheadCounterString := ""
+
+	if aheadCounter != 0 {
+		aheadCounterString = aheadIcon + strconv.Itoa(aheadCounter)
+	}
+
+	log.Debug("distance to nearest jj bookmark:" + aheadCounterString)
+
+	// Loop through each bookmark
+	for index, mark := range marks {
+		if index > 0 {
+			endString.WriteString(" ")
+		}
+
+		endString.WriteString(mark + aheadCounterString)
+	}
+
+	return endString.String()
 }
 
 func (jj *Jujutsu) shouldDisplay(displayStatus bool) bool {
@@ -103,8 +154,7 @@ func (jj *Jujutsu) setDir(dir string) {
 }
 
 func (jj *Jujutsu) setJujutsuStatus() {
-	// https://jj-vcs.github.io/jj/latest/templates/#commit-keywords
-	statusString, err := jj.getJujutsuCommandOutput("log", "-r", "@", "--no-graph", "-T", jjLogTemplate)
+	statusString, err := jj.getJujutsuCommandOutput("log", "-r", "@", "--no-graph", "-T", jj.logTemplate())
 	if err != nil {
 		return
 	}
@@ -119,10 +169,15 @@ func (jj *Jujutsu) setJujutsuStatus() {
 	}
 }
 
+func (jj *Jujutsu) logTemplate() string {
+	// https://jj-vcs.github.io/jj/latest/templates/#commit-keywords
+	return fmt.Sprintf(`change_id.shortest(%d) ++ "\n" ++ diff.summary()`, jj.options.Int(ChangeIDMinLen, 0))
+}
+
 func (jj *Jujutsu) getJujutsuCommandOutput(command string, args ...string) (string, error) {
 	cli := []string{"--repository", jj.repoRootDir, "--no-pager", "--color", "never"}
 
-	if jj.props.GetBool(IgnoreWorkingCopy, true) {
+	if jj.options.Bool(IgnoreWorkingCopy, true) {
 		cli = append(cli, "--ignore-working-copy")
 	}
 

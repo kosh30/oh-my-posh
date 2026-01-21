@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
-	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache/mock"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/upgrade"
 	"github.com/jandedobbeleer/oh-my-posh/src/color"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/mock"
@@ -12,7 +11,6 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
 	"github.com/stretchr/testify/assert"
-	mock_ "github.com/stretchr/testify/mock"
 )
 
 func TestGetPalette(t *testing.T) {
@@ -98,7 +96,9 @@ func TestGetPalette(t *testing.T) {
 		env.On("Shell").Return("bash")
 
 		template.Cache = &cache.Template{
-			Shell: "bash",
+			SimpleTemplate: cache.SimpleTemplate{
+				Shell: "bash",
+			},
 		}
 		template.Init(env, nil, nil)
 
@@ -125,60 +125,48 @@ func TestUpgradeFeatures(t *testing.T) {
 		{
 			Case:                  "cache exists, no force",
 			UpgradeCacheKeyExists: true,
-			ExpectedFeats:         shell.Features{},
+			ExpectedFeats:         0,
 		},
 		{
 			Case:          "auto upgrade enabled",
 			AutoUpgrade:   true,
-			ExpectedFeats: shell.Features{shell.Upgrade},
+			ExpectedFeats: shell.Upgrade,
 		},
 		{
 			Case:           "auto upgrade via cache",
 			AutoUpgradeKey: true,
-			ExpectedFeats:  shell.Features{shell.Upgrade},
+			ExpectedFeats:  shell.Upgrade,
 		},
 		{
 			Case:          "notice enabled, no auto upgrade",
 			DisplayNotice: true,
-			ExpectedFeats: shell.Features{shell.Notice},
+			ExpectedFeats: shell.Notice,
 		},
 		{
 			Case:          "notice via cache, no auto upgrade",
 			NoticeKey:     true,
-			ExpectedFeats: shell.Features{shell.Notice},
+			ExpectedFeats: shell.Notice,
 		},
 		{
 			Case:                  "force upgrade ignores cache",
 			UpgradeCacheKeyExists: true,
 			Force:                 true,
 			AutoUpgrade:           true,
-			ExpectedFeats:         shell.Features{shell.Upgrade},
+			ExpectedFeats:         shell.Upgrade,
 		},
 	}
 
 	for _, tc := range cases {
-		env := &mock.Environment{}
-		c := &cache_.Cache{}
-		env.On("Cache").Return(c)
-
 		if tc.UpgradeCacheKeyExists {
-			c.On("Get", upgrade.CACHEKEY).Return("", true)
-		} else {
-			c.On("Get", upgrade.CACHEKEY).Return("", false)
+			cache.Set(cache.Device, upgrade.CACHEKEY, "", cache.INFINITE)
 		}
 
-		c.On("Set", upgrade.CACHEKEY, "", mock_.Anything).Return()
-
 		if tc.AutoUpgradeKey {
-			c.On("Get", AUTOUPGRADE).Return("", true)
-		} else {
-			c.On("Get", AUTOUPGRADE).Return("", false)
+			cache.Set(cache.Device, AUTOUPGRADE, true, cache.INFINITE)
 		}
 
 		if tc.NoticeKey {
-			c.On("Get", UPGRADENOTICE).Return("", true)
-		} else {
-			c.On("Get", UPGRADENOTICE).Return("", false)
+			cache.Set(cache.Device, UPGRADENOTICE, true, cache.INFINITE)
 		}
 
 		cfg := &Config{
@@ -189,7 +177,9 @@ func TestUpgradeFeatures(t *testing.T) {
 			},
 		}
 
-		got := cfg.upgradeFeatures(env)
+		got := cfg.upgradeFeatures()
 		assert.Equal(t, tc.ExpectedFeats, got, tc.Case)
+
+		cache.DeleteAll(cache.Device)
 	}
 }

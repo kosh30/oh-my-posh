@@ -11,14 +11,13 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	cache_ "github.com/jandedobbeleer/oh-my-posh/src/cache"
 	"github.com/jandedobbeleer/oh-my-posh/src/cli/progress"
 	"github.com/jandedobbeleer/oh-my-posh/src/terminal"
+	"github.com/jandedobbeleer/oh-my-posh/src/text"
 )
 
 var (
 	program *tea.Program
-	cache   cache_.Cache
 )
 
 const listHeight = 14
@@ -80,7 +79,6 @@ type main struct {
 	Asset
 	families []string
 	state    state
-	system   bool
 }
 
 func (m *main) buildFontList(nerdFonts []*Asset) {
@@ -102,7 +100,7 @@ func (m *main) buildFontList(nerdFonts []*Asset) {
 }
 
 func getFontsList() {
-	fonts, err := Fonts()
+	fonts, err := fonts()
 	if err != nil {
 		program.Send(errMsg(err))
 		return
@@ -132,7 +130,7 @@ func installLocalFontZIP(m *main) {
 }
 
 func installFontZIP(zipFile []byte, m *main) {
-	families, err := InstallZIP(zipFile, m)
+	families, err := InstallZIP(zipFile, m.Folder)
 	if err != nil {
 		program.Send(errMsg(err))
 		return
@@ -142,54 +140,24 @@ func installFontZIP(zipFile []byte, m *main) {
 }
 
 func (m *main) Init() tea.Cmd {
-	isLocalZipFile := func() bool {
-		return !strings.HasPrefix(m.URL, "https") && strings.HasSuffix(m.URL, ".zip")
-	}
-
-	resolveFontZipURL := func() error {
-		if strings.HasPrefix(m.URL, "https") {
-			return nil
-		}
-
-		fonts, err := Fonts()
-		if err != nil {
-			return err
-		}
-
-		var fontAsset *Asset
-		for _, font := range fonts {
-			if !strings.EqualFold(m.URL, font.Name) {
-				continue
-			}
-
-			fontAsset = font
-			break
-		}
-
-		if fontAsset == nil {
-			return fmt.Errorf("no matching font found")
-		}
-
-		m.Asset = *fontAsset
-
-		return nil
-	}
-
 	m.progress = progress.NewModel()
 
 	s := spinner.New()
 	m.spinner = &s
 
-	if len(m.URL) != 0 && !isLocalZipFile() {
+	if len(m.URL) != 0 && !IsLocalZipFile(m.URL) {
 		m.state = downloadFont
 
-		if err := resolveFontZipURL(); err != nil {
+		asset, err := ResolveFontAsset(m.URL)
+		if err != nil {
 			m.err = err
 			return tea.Quit
 		}
 
+		m.Asset = *asset
+
 		defer func() {
-			go downloadFontZip(m.URL)
+			go downloadFontZip(asset.URL)
 		}()
 
 		m.spinner.Spinner = spinner.Globe
@@ -197,7 +165,7 @@ func (m *main) Init() tea.Cmd {
 	}
 
 	defer func() {
-		if isLocalZipFile() {
+		if IsLocalZipFile(m.URL) {
 			go installLocalFontZIP(m)
 			return
 		}
@@ -209,7 +177,7 @@ func (m *main) Init() tea.Cmd {
 	m.spinner.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
 	m.state = getFonts
 
-	if isLocalZipFile() {
+	if IsLocalZipFile(m.URL) {
 		m.state = unzipFont
 	}
 
@@ -341,32 +309,35 @@ func (m *main) View() string {
 			return textStyle.Render(fmt.Sprintf("No matching font families were installed. Try setting --zip-folder to the correct folder when using CascadiaCode (MS) or a custom font zip file. %s", terminal.StopProgress())) //nolint: lll
 		}
 
-		var builder strings.Builder
+		sb := text.NewBuilder()
 
-		builder.WriteString(fmt.Sprintf("Successfully installed %s 🚀\n\n%s", m.Name, terminal.StopProgress()))
-		builder.WriteString("The following font families are now available for configuration:\n\n")
+		sb.WriteString(fmt.Sprintf("Successfully installed %s 🚀\n\n%s", m.Name, terminal.StopProgress()))
+		sb.WriteString("The following font families are now available for configuration:\n\n")
 
 		for i, family := range m.families {
-			builder.WriteString(fmt.Sprintf("  • %s", family))
+			sb.WriteString(fmt.Sprintf("  • %s", family))
 
 			if i < len(m.families)-1 {
-				builder.WriteString("\n")
+				sb.WriteString("\n")
 			}
 		}
 
-		return textStyle.Render(builder.String())
+		return textStyle.Render(sb.String())
 	}
 
 	return ""
 }
 
-func SetCache(c cache_.Cache) {
-	cache = c
+func Run(font, zipFolder string, headless bool) (string, error) {
+	if headless {
+		return installHeadless(font, zipFolder)
+	}
+
+	return tui(font, zipFolder)
 }
 
-func Run(font string, ch cache_.Cache, root bool, zipFolder string) error {
+func tui(font, zipFolder string) (string, error) {
 	main := &main{
-		system: root,
 		Asset: Asset{
 			Name:   font,
 			URL:    font,
@@ -374,9 +345,22 @@ func Run(font string, ch cache_.Cache, root bool, zipFolder string) error {
 		},
 	}
 
-	SetCache(ch)
-
 	program = tea.NewProgram(main)
 	_, err := program.Run()
-	return err
+	return main.Name, err
+}
+
+func installHeadless(font, zipFolder string) (string, error) {
+	// Handle local zip file
+	if IsLocalZipFile(font) {
+		data, err := os.ReadFile(font)
+		if err != nil {
+			return "", err
+		}
+
+		_, err = InstallZIP(data, zipFolder)
+		return font, err
+	}
+
+	return downloadAndInstall(font, zipFolder)
 }

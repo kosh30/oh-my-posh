@@ -7,6 +7,10 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 )
 
+const (
+	fooBarMan = "\\foo\\bar\\man"
+)
+
 var testParentCases = []testParentCase{
 	{
 		Case:          "Windows Home folder",
@@ -246,7 +250,7 @@ var testAgnosterPathCases = []testAgnosterPathCase{
 		PathSeparator: `\`,
 	},
 	{
-		Case:          "Windows oustide home",
+		Case:          "Windows outside home",
 		Expected:      "~ > f > f > location",
 		Home:          homeDirWindows,
 		PWD:           homeDirWindows + "\\Documents\\Bill\\location",

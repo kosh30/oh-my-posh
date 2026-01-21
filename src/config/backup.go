@@ -2,13 +2,13 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"strings"
 
-	json "github.com/goccy/go-json"
 	toml "github.com/pelletier/go-toml/v2"
-	yaml "gopkg.in/yaml.v3"
+	yaml "go.yaml.in/yaml/v3"
 )
 
 func (cfg *Config) Backup() {
@@ -54,7 +54,7 @@ func (cfg *Config) Export(format string) string {
 		_ = jsonEncoder.Encode(cfg)
 		prefix := "{\n  \"$schema\": \"https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json\","
 		data := strings.Replace(result.String(), "{", prefix, 1)
-		return escapeGlyphs(data, cfg.MigrateGlyphs)
+		return EscapeGlyphs(data, cfg.MigrateGlyphs)
 	case TOML:
 		tomlEncoder := toml.NewEncoder(&result)
 		tomlEncoder.SetIndentTables(true)
@@ -69,12 +69,6 @@ func (cfg *Config) Export(format string) string {
 
 	// unsupported format
 	return ""
-}
-
-func (cfg *Config) BackupAndMigrate() {
-	cfg.Backup()
-	cfg.Migrate()
-	cfg.Write(cfg.Format)
 }
 
 func (cfg *Config) Write(format string) {
