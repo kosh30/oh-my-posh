@@ -3414,6 +3414,53 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "stmach",
+      "name": "Stefan Mach",
+      "avatar_url": "https://avatars.githubusercontent.com/u/33124232?v=4",
+      "profile": "https://github.com/stmach",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "squaricdot",
+      "name": "Olmo Rupert",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4513505?v=4",
+      "profile": "http://squaricdot.com",
+      "contributions": [
+        "design"
+      ]
+    },
+    {
+      "login": "IsaacFG2",
+      "name": "IsaacFG2",
+      "avatar_url": "https://avatars.githubusercontent.com/u/147211323?v=4",
+      "profile": "https://github.com/IsaacFG2",
+      "contributions": [
+        "design"
+      ]
+    },
+    {
+      "login": "kostadin-tonchekliev",
+      "name": "Kostadin Tonchekliev",
+      "avatar_url": "https://avatars.githubusercontent.com/u/95169764?v=4",
+      "profile": "https://github.com/kostadin-tonchekliev",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "soroshsabz",
+      "name": "soroshsabz",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17947618?v=4",
+      "profile": "https://github.com/soroshsabz",
+      "contributions": [
+        "doc"
+      ]
     }
   ],
   "contributorsPerLine": 7,
