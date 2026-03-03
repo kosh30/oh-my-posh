@@ -3461,6 +3461,64 @@
       "contributions": [
         "doc"
       ]
+    },
+    {
+      "login": "yblossier",
+      "name": "Yoann BLOSSIER",
+      "avatar_url": "https://avatars.githubusercontent.com/u/60755917?v=4",
+      "profile": "https://blog.toenn-vaot.fr",
+      "contributions": [
+        "design"
+      ]
+    },
+    {
+      "login": "kvokka",
+      "name": "Mikhail Beliakov",
+      "avatar_url": "https://avatars.githubusercontent.com/u/15954013?v=4",
+      "profile": "https://kvokka.github.io/",
+      "contributions": [
+        "code",
+        "doc"
+      ]
+    },
+    {
+      "login": "MrRainbow0704",
+      "name": "Marco Simone",
+      "avatar_url": "https://avatars.githubusercontent.com/u/95081253?v=4",
+      "profile": "https://github.com/MrRainbow0704",
+      "contributions": [
+        "code",
+        "design",
+        "doc"
+      ]
+    },
+    {
+      "login": "sbeardsley",
+      "name": "sbeardsley",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6288131?v=4",
+      "profile": "https://github.com/sbeardsley",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "maxvictor",
+      "name": "Max Victor",
+      "avatar_url": "https://avatars.githubusercontent.com/u/11591713?v=4",
+      "profile": "https://www.linkedin.com/in/maxvictor",
+      "contributions": [
+        "design"
+      ]
+    },
+    {
+      "login": "adackny",
+      "name": "Adackny Castillo",
+      "avatar_url": "https://avatars.githubusercontent.com/u/61998238?v=4",
+      "profile": "https://github.com/adackny",
+      "contributions": [
+        "code",
+        "doc"
+      ]
     }
   ],
   "contributorsPerLine": 7,

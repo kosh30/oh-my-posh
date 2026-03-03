@@ -111,6 +111,7 @@ export default {
           collapsed: true,
           items: [
             "segments/health/nightscout",
+            "segments/health/ramadan",
             "segments/health/strava",
             "segments/health/withings",
           ]
@@ -232,6 +233,14 @@ export default {
       collapsed: true,
       items: [
         "advanced/mcp-server",
+      ],
+    },
+    {
+      type: "category",
+      label: "🧪 Experimental",
+      collapsed: true,
+      items: [
+        "experimental/streaming",
       ],
     },
     "faq",
