@@ -8,7 +8,6 @@ type Bazel struct {
 }
 
 const (
-	// Bazel's icon
 	Icon options.Option = "icon"
 )
 
@@ -16,17 +15,19 @@ func (b *Bazel) Template() string {
 	return " {{ if .Error }}{{ .Icon }} {{ .Error }}{{ else }}{{ url .Icon .URL }} {{ .Full }}{{ end }} "
 }
 
+const bazelToolName = "bazel"
+
 func (b *Bazel) Enabled() bool {
 	b.extensions = []string{"*.bazel", "*.bzl", "BUILD", "WORKSPACE", ".bazelrc", ".bazelversion"}
 	b.folders = []string{"bazel-bin", "bazel-out", "bazel-testlogs"}
 	b.tooling = map[string]*cmd{
-		"bazel": {
-			executable: "bazel",
-			args:       []string{"--version"},
-			regex:      `bazel (?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+)))`,
+		bazelToolName: {
+			executable: bazelToolName,
+			args:       []string{versionFlagArg},
+			regex:      `bazel ` + versionRegex,
 		},
 	}
-	b.defaultTooling = []string{"bazel"}
+	b.defaultTooling = []string{bazelToolName}
 	// Use the correct URL for Bazel >5.4.1, since they do not have the docs subdomain.
 	b.versionURLTemplate = "https://{{ if lt .Major 6 }}docs.{{ end }}bazel.build/versions/{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
 

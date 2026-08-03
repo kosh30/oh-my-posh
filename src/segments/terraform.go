@@ -5,9 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 
-	"github.com/hashicorp/hcl/v2/gohcl"
-	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
 )
 
@@ -26,12 +25,8 @@ func (tf *Terraform) Template() string {
 	return " {{ .WorkspaceName }}{{ if .Version }} {{ .Version }}{{ end }} "
 }
 
-type TerraFormConfig struct {
-	Terraform *TerraformBlock `hcl:"terraform,block"`
-}
-
 type TerraformBlock struct {
-	Version *string `hcl:"required_version" json:"terraform_version"`
+	Version *string `json:"terraform_version"`
 }
 
 func (tf *Terraform) Enabled() bool {
@@ -47,11 +42,54 @@ func (tf *Terraform) Enabled() bool {
 		return true
 	}
 
+	// tenv (https://github.com/tofuutils/tenv) pins the version through an
+	// environment variable or a version file, which takes precedence over the
+	// version declared in the terraform files or the state file.
+	if tf.setVersionFromTenv() {
+		return true
+	}
+
 	if err := tf.setVersionFromTfFiles(); err == nil {
 		return true
 	}
 
 	tf.setVersionFromTfStateFile()
+	return true
+}
+
+func (tf *Terraform) tenvSources() (envVar, versionFile string) {
+	cmd := tf.options.String(Command, "terraform")
+	if strings.Contains(cmd, "tofu") {
+		return "TOFUENV_TOFU_VERSION", ".opentofu-version"
+	}
+
+	return "TFENV_TERRAFORM_VERSION", ".terraform-version"
+}
+
+func (tf *Terraform) setVersionFromTenv() bool {
+	envVar, versionFile := tf.tenvSources()
+
+	// the environment variable takes precedence over the version file
+	if version := strings.TrimSpace(tf.env.Getenv(envVar)); version != "" {
+		tf.Version = &version
+		return true
+	}
+
+	if !tf.env.HasFiles(versionFile) {
+		return false
+	}
+
+	version := strings.TrimSpace(tf.env.FileContent(versionFile))
+	// a version file holds a single version reference, guard against trailing content
+	if line, _, found := strings.Cut(version, "\n"); found {
+		version = strings.TrimSpace(line)
+	}
+
+	if version == "" {
+		return false
+	}
+
+	tf.Version = &version
 	return true
 }
 
@@ -71,7 +109,8 @@ func (tf *Terraform) inContext(fetchVersion bool) bool {
 		return false
 	}
 
-	versionFiles := []string{"versions.tf", "main.tf", "terraform.tfstate"}
+	_, tenvVersionFile := tf.tenvSources()
+	versionFiles := []string{"versions.tf", "main.tf", "terraform.tfstate", tenvVersionFile}
 	return slices.ContainsFunc(versionFiles, tf.env.HasFiles)
 }
 
@@ -82,20 +121,13 @@ func (tf *Terraform) setVersionFromTfFiles() error {
 			continue
 		}
 
-		parser := hclparse.NewParser()
 		content := tf.env.FileContent(file)
-		hclFile, diags := parser.ParseHCL([]byte(content), file)
-		if diags != nil {
+		version, ok := extractRequiredVersion(content)
+		if !ok {
 			continue
 		}
 
-		var config TerraFormConfig
-		diags = gohcl.DecodeBody(hclFile.Body, nil, &config)
-		if diags != nil || config.Terraform == nil {
-			continue
-		}
-
-		tf.TerraformBlock = *config.Terraform
+		tf.Version = &version
 		return nil
 	}
 	return errors.New("no valid terraform files found")

@@ -63,28 +63,18 @@ type Path struct {
 }
 
 const (
-	// FolderSeparatorIcon the path which is split will be separated by this icon
-	FolderSeparatorIcon options.Option = "folder_separator_icon"
-	// FolderSeparatorTemplate the path which is split will be separated by this template
+	FolderSeparatorIcon     options.Option = "folder_separator_icon"
 	FolderSeparatorTemplate options.Option = "folder_separator_template"
-	// HomeIcon indicates the $HOME location
-	HomeIcon options.Option = "home_icon"
-	// FolderIcon identifies one folder
-	FolderIcon options.Option = "folder_icon"
-	// WindowsRegistryIcon indicates the registry location on Windows
-	WindowsRegistryIcon options.Option = "windows_registry_icon"
-	// Agnoster displays a short path with separator icon, this the default style
-	Agnoster string = "agnoster"
-	// AgnosterFull displays all the folder names with the folder_separator_icon
-	AgnosterFull string = "agnoster_full"
-	// AgnosterShort displays the folder names with one folder_separator_icon, regardless of depth
+	HomeIcon                options.Option = "home_icon"
+	FolderIcon              options.Option = "folder_icon"
+	WindowsRegistryIcon     options.Option = "windows_registry_icon"
+	// Agnoster is the default style.
+	Agnoster      string = "agnoster"
+	AgnosterFull  string = "agnoster_full"
 	AgnosterShort string = "agnoster_short"
-	// Short displays a shorter path
-	Short string = "short"
-	// Full displays the full path
-	Full string = "full"
-	// FolderType displays the current folder
-	FolderType string = "folder"
+	Short         string = "short"
+	Full          string = "full"
+	FolderType    string = "folder"
 	// Mixed like agnoster, but if a folder name is short enough, it is displayed as-is
 	Mixed string = "mixed"
 	// Letter like agnoster, but with the first letter of each folder name
@@ -93,45 +83,30 @@ const (
 	Unique string = "unique"
 	// AgnosterLeft like agnoster, but keeps the left side of the path
 	AgnosterLeft string = "agnoster_left"
-	// Powerlevel tries to mimic the powerlevel10k path,
-	// used in combination with max_width.
-	Powerlevel string = "powerlevel"
-	// MixedThreshold the threshold of the length of the path Mixed will display
-	MixedThreshold options.Option = "mixed_threshold"
-	// MappedLocations allows overriding certain location with an icon
-	MappedLocations options.Option = "mapped_locations"
-	// MappedLocationsEnabled enables overriding certain locations with an icon
+	// Powerlevel tries to mimic the powerlevel10k path; used in combination with max_width.
+	Powerlevel             string         = "powerlevel"
+	MixedThreshold         options.Option = "mixed_threshold"
+	MappedLocations        options.Option = "mapped_locations"
 	MappedLocationsEnabled options.Option = "mapped_locations_enabled"
-	// MaxDepth Maximum path depth to display without shortening
-	MaxDepth options.Option = "max_depth"
-	// MaxWidth Maximum path width to display for powerlevel style
-	MaxWidth options.Option = "max_width"
-	// Hides the root location if it doesn't fit in max_depth. Used in Agnoster Short
-	HideRootLocation options.Option = "hide_root_location"
-	// A color override cycle
-	Cycle options.Option = "cycle"
-	// Color the path separators within the cycle
+	// Expands capture group references ($1, ${name}, ...) using the full regex match,
+	// instead of only substituting the first capture group.
+	MappedLocationsRegexExpand options.Option = "mapped_locations_regex_expand"
+	MaxDepth                   options.Option = "max_depth"
+	MaxWidth                   options.Option = "max_width"
+	// Hides the root location if it doesn't fit in max_depth; used in Agnoster Short.
+	HideRootLocation     options.Option = "hide_root_location"
+	Cycle                options.Option = "cycle"
 	CycleFolderSeparator options.Option = "cycle_folder_separator"
-	// format to use on the folder names
-	FolderFormat options.Option = "folder_format"
-	// format to use on the first and last folder of the path
-	EdgeFormat options.Option = "edge_format"
-	// format to use on first folder of the path
-	LeftFormat options.Option = "left_format"
-	// format to use on the last folder of the path
-	RightFormat options.Option = "right_format"
-	// GitDirFormat format to use on the git directory
-	GitDirFormat options.Option = "gitdir_format"
-	// DisplayCygpath transforms the path to a cygpath format
-	DisplayCygpath options.Option = "display_cygpath"
-	// DisplayRoot indicates if the linux root slash should be displayed
-	DisplayRoot options.Option = "display_root"
-	// Fish displays the path in a fish-like style
-	Fish string = "fish"
-	// DirLength the length of the directory name to display in fish style
-	DirLength options.Option = "dir_length"
-	// FullLengthDirs indicates how many full length directory names should be displayed in fish style
-	FullLengthDirs options.Option = "full_length_dirs"
+	FolderFormat         options.Option = "folder_format"
+	EdgeFormat           options.Option = "edge_format"
+	LeftFormat           options.Option = "left_format"
+	RightFormat          options.Option = "right_format"
+	GitDirFormat         options.Option = "gitdir_format"
+	DisplayCygpath       options.Option = "display_cygpath"
+	DisplayRoot          options.Option = "display_root"
+	Fish                 string         = "fish"
+	DirLength            options.Option = "dir_length"
+	FullLengthDirs       options.Option = "full_length_dirs"
 )
 
 func (pt *Path) Template() string {
@@ -278,7 +253,12 @@ func (pt *Path) setStyle() {
 	}
 
 	// make sure we resolve all templates
-	if txt, err := template.Render(pt.Path, pt); err == nil {
+	//
+	// pt.Path is composed from raw filesystem folder names (untrusted) plus
+	// already-rendered config templates, so it must never get the func map
+	// entries that touch the OS (cmd/readFile/stat/glob) — use the restricted
+	// renderer, not template.Render.
+	if txt, err := template.RenderUntrusted(pt.Path, pt); err == nil {
 		pt.Path = txt
 	}
 }
@@ -289,7 +269,7 @@ func (pt *Path) getMaxWidth() int {
 		return 0
 	}
 
-	txt, err := template.Render(width, pt)
+	txt, err := template.RenderTrusted(width, pt)
 	if err != nil {
 		log.Error(err)
 		return 0
@@ -316,7 +296,7 @@ func (pt *Path) getFolderSeparator() string {
 		return separator
 	}
 
-	txt, err := template.Render(separatorTemplate, pt)
+	txt, err := template.RenderTrusted(separatorTemplate, pt)
 	if err != nil {
 		log.Error(err)
 	}
@@ -648,7 +628,7 @@ func (pt *Path) setMappedLocations() {
 			continue
 		}
 
-		location, err := template.Render(key, pt)
+		location, err := template.RenderTrusted(key, pt)
 		if err != nil {
 			log.Error(err)
 		}
@@ -713,13 +693,25 @@ func (pt *Path) replaceMappedLocations(inputPath string) (string, string) {
 			pattern = "(?i)" + pattern
 		}
 
-		match, OK := regex.FindStringMatch(pattern, input, 1)
+		if pt.options.Bool(MappedLocationsRegexExpand, false) {
+			if !regex.MatchString(pattern, input) {
+				return "", false
+			}
+
+			// Replace the full match, expanding $1, ${name}, etc. from the mapped location.
+			input = regex.ReplaceAllString(pattern, input, pt.mappedLocations[key])
+			input = path.Clean(input)
+
+			return input, true
+		}
+
+		start, end, OK := regex.FindStringMatchIndex(pattern, input, 1)
 		if !OK {
 			return "", false
 		}
 
-		// Replace the first match with the mapped location.
-		input = strings.Replace(input, match, pt.mappedLocations[key], 1)
+		// Replace the matched span with the mapped location.
+		input = input[:start] + pt.mappedLocations[key] + input[end:]
 		input = path.Clean(input)
 
 		return input, true
@@ -765,7 +757,6 @@ func (pt *Path) replaceMappedLocations(inputPath string) (string, string) {
 	return escape(root), strings.Trim(escape(relative), pt.pathSeparator)
 }
 
-// parsePath parses a clean input path into a root and a relative.
 func (pt *Path) parsePath(inputPath string) (string, string) {
 	var root, relative string
 
@@ -972,7 +963,8 @@ func (pt *Path) makeFolderFormatMap() map[string]string {
 
 	if gitDirFormat := pt.options.String(GitDirFormat, ""); len(gitDirFormat) != 0 {
 		dir, err := pt.env.HasParentFilePath(".git", false)
-		if err == nil && dir.IsDir {
+		if err == nil {
+			// Linked worktrees use a .git file instead of a directory.
 			// Make it consistent with the modified parent.
 			parent := pt.join(pt.replaceMappedLocations(dir.ParentFolder))
 			folderFormatMap[parent] = gitDirFormat

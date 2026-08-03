@@ -7,7 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var allFeatures = Tooltips | LineError | Transient | Jobs | Azure | PoshGit | FTCSMarks | Upgrade | Notice | PromptMark | RPrompt | CursorPositioning | KeyHandlers | Streaming
+var allFeatures = Tooltips | LineError | Transient | Jobs | Azure | PoshGit | FTCSMarks |
+	Upgrade | Notice | PromptMark | RPrompt | CursorPositioning | KeyHandlers | Streaming | VIMode | TransientRPrompt
 
 func TestPwshFeatures(t *testing.T) {
 	got := allFeatures.Lines(PWSH).String("")
@@ -22,8 +23,21 @@ $global:_ompTransientPrompt = $true
 $global:_ompFTCSMarks = $true
 & $global:_ompExecutable upgrade --auto
 & $global:_ompExecutable notice
-$global:_ompStreaming = $true
-Enable-KeyHandlers`
+Enable-PoshStreaming
+Enable-KeyHandlers
+Enable-PoshVIMode`
+
+	assert.Equal(t, want, got)
+}
+
+func TestSourceCommandAsyncPwsh(t *testing.T) {
+	got := sourceCommandAsync(PWSH, "C:/cache/init.pwsh.ps1")
+
+	want := "if (-not (Get-Variable -Name _ompOriginalPromptFunction -Scope Global -ErrorAction Ignore -ValueOnly)) { $global:_ompOriginalPromptFunction = $Function:prompt }; " +
+		"$global:_ompPromptFunction = $null; " +
+		"$global:_ompInitialized = $false; " +
+		"function prompt() { if (-not $global:_ompInitialized) { $global:_ompAsyncInit = $true; & 'C:/cache/init.pwsh.ps1'; return }; " +
+		"if ($global:_ompPromptFunction) { & $global:_ompPromptFunction } }"
 
 	assert.Equal(t, want, got)
 }

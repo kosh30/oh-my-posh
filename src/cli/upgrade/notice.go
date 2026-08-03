@@ -2,10 +2,8 @@ package upgrade
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/build"
-	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/http"
 )
 
@@ -20,17 +18,7 @@ To enable automated upgrades, run: 'oh-my-posh enable upgrade'.
 `
 )
 
-// Returns the upgrade notice if a new version is available
-// that should be displayed to the user.
-//
-// The upgrade check is only performed every other week.
 func (cfg *Config) Notice() (string, bool) {
-	// never validate when we install using the Windows Store
-	if os.Getenv("POSH_INSTALLER") == "ws" {
-		log.Debug("skipping upgrade check because we are using the Windows Store")
-		return "", false
-	}
-
 	if !http.IsConnected() {
 		return "", false
 	}

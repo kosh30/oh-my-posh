@@ -3,9 +3,16 @@ config:
     line_length: 120
     code_blocks: false
   MD024: false
-fix: true
 gitignore: true
 ignores:
   - node_modules/
-  - .github/agents/segment-docs.md
+  - .github/agents/*.agent.md
   - .github/PULL_REQUEST_TEMPLATE.md
+  - .agents/skills/ast-grep
+  - .agents/skills/code-changes
+  - .agents/skills/conventional-commit
+  - .agents/skills/golang
+  - .agents/skills/markdown
+  - .agents/skills/powershell
+  - .agents/skills/writing-clearly-and-concisely
+  - .github/instructions/*

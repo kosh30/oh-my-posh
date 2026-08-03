@@ -1,7 +1,7 @@
 ---
 id: fonts
 title: Fonts
-sidebar_label: 🔤 Fonts
+sidebar_label: Fonts
 ---
 
 import Tabs from "@theme/Tabs";
@@ -30,7 +30,7 @@ your terminal emulator to use it.
 }>
 <TabItem value="oh-my-posh">
 
-Oh My Posh has a CLI to help you select and install a [Nerd Font][nerdfonts]:
+Oh My Posh has a CLI to install a [Nerd Font][nerdfonts]:
 
 :::info
 When running as root/administrator, the fonts will be installed system-wide.
@@ -39,14 +39,26 @@ By default, Oh My Posh installs the `.ttf` version of the font in case multiple 
 :::
 
 ```bash
-oh-my-posh font install
+oh-my-posh font install meslo
 ```
 
-This will present a list of Nerd Font libraries, from which you can  select `Meslo`, which includes the
-`Meslo LGM NF` font we recommend. Note that you can also install it directly via:
+We recommend `Meslo`, which includes the `Meslo LGM NF` font. To see every font you can install:
 
 ```bash
-oh-my-posh font install meslo
+oh-my-posh font list
+```
+
+That prints one name per line, so you can search it:
+
+```bash
+oh-my-posh font list | grep -i mono
+```
+
+You can also install straight from a URL or a local zip file:
+
+```bash
+oh-my-posh font install https://example.com/font.zip
+oh-my-posh font install ./CascadiaCode.zip
 ```
 
 </TabItem>
@@ -159,7 +171,30 @@ The `minimal` themes do not make use of Nerd Font icons.
 
 [Creating your own theme][configuration] is always an option too 😊
 
+## Referencing glyphs in your config
+
+[Templates][templates] reference Nerd Font glyphs using Unicode escape sequences. Glyphs with code points up to
+U+FFFF use the standard `\uXXXX` (4 hex digits) form, which works in all config formats.
+
+Glyphs above U+FFFF (supplementary characters) require a format-specific escape:
+
+| Escape form | JSON | YAML | TOML |
+|---|---|---|---|
+| `\uDB82\uDFC9` (surrogate pair) | ✅ | ❌ | ❌ |
+| `\U000F0BC9` (8-digit `\U`) | ❌ | ✅ | ✅ |
+| literal glyph | ✅ | ✅ | ✅ |
+
+JSON combines a surrogate pair like `\uDB82\uDFC9` into the single code point U+F0BC9. YAML and TOML reject
+surrogate pairs; use the 8-digit `\U` form instead. To avoid format-specific escapes altogether, embed the
+literal character directly.
+
+:::tip
+[FileFormat.info][fileformat] lists every representation for a given glyph.
+:::
+
 [nerdfonts]: https://www.nerdfonts.com/
 [nerdfonts-ps]: https://psmodule.io/NerdFonts
 [configuration]: /docs/installation/customize
 [vs-otf]: https://stackoverflow.com/questions/75252606/is-it-possible-to-use-nerd-fonts-as-the-font-for-terminals-in-visual-studio
+[templates]: /docs/configuration/templates
+[fileformat]: https://www.fileformat.info/info/unicode/char/F0BC9/index.htm

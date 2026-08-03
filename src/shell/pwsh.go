@@ -30,9 +30,11 @@ func (f Features) Pwsh() Code {
 	case Notice:
 		return "& $global:_ompExecutable notice"
 	case Streaming:
-		return "$global:_ompStreaming = $true"
+		return "Enable-PoshStreaming"
 	case KeyHandlers:
 		return "Enable-KeyHandlers"
+	case VIMode:
+		return "Enable-PoshVIMode"
 	case PromptMark, RPrompt, CursorPositioning, Async:
 		fallthrough
 	default:

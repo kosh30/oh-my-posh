@@ -14,13 +14,10 @@ import (
 )
 
 const (
-	// Fallback to native command
 	NativeFallback options.Option = "native_fallback"
-	// Override the built-in status formats
-	StatusFormats options.Option = "status_formats"
+	StatusFormats  options.Option = "status_formats"
 )
 
-// ScmStatus represents part of the status of a repository
 type ScmStatus struct {
 	Formats    map[string]string
 	Unmerged   int
@@ -99,7 +96,6 @@ type Scm struct {
 }
 
 const (
-	// BranchTemplate allows to specify a template for the branch name
 	BranchTemplate options.Option = "branch_template"
 )
 
@@ -163,7 +159,7 @@ func (s *Scm) formatBranch(branch string) string {
 		return branch
 	}
 
-	txt, err := template.Render(branchTemplate, struct{ Branch, Upstream string }{Branch: branch, Upstream: s.Upstream})
+	txt, err := template.RenderTrusted(branchTemplate, struct{ Branch, Upstream string }{Branch: branch, Upstream: s.Upstream})
 	if err != nil {
 		return branch
 	}

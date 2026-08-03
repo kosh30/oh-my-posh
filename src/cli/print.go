@@ -9,7 +9,7 @@ import (
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
 
-	"github.com/spf13/cobra"
+	"github.com/jandedobbeleer/oh-my-posh/src/cmdtree"
 )
 
 var (
@@ -31,18 +31,18 @@ var (
 	noStatus     bool
 	column       int
 	escape       bool
+	interrupted  bool
 )
 
-// printCmd represents the print command
 var printCmd = createPrintCmd()
 
 func init() {
 	RootCmd.AddCommand(printCmd)
 }
 
-func createPrintCmd() *cobra.Command {
-	printCmd := &cobra.Command{
-		Use:   "print [debug|primary|secondary|transient|right|tooltip|valid|error|preview]",
+func createPrintCmd() *cmdtree.Command {
+	printCmd := &cmdtree.Command{
+		Use:   "print [debug|primary|secondary|transient|transient-right|right|tooltip|valid|error|preview]",
 		Short: "Print the prompt/context",
 		Long:  "Print one of the prompts based on the location/use-case.",
 		ValidArgs: []string{
@@ -50,6 +50,7 @@ func createPrintCmd() *cobra.Command {
 			prompt.PRIMARY,
 			prompt.SECONDARY,
 			prompt.TRANSIENT,
+			prompt.TRANSIENT_RIGHT,
 			prompt.RIGHT,
 			prompt.TOOLTIP,
 			prompt.VALID,
@@ -57,7 +58,7 @@ func createPrintCmd() *cobra.Command {
 			prompt.PREVIEW,
 		},
 		Args: NoArgsOrOneValidArg,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cmdtree.Command, args []string) {
 			if len(args) == 0 {
 				_ = cmd.Help()
 				return
@@ -88,6 +89,13 @@ func createPrintCmd() *cobra.Command {
 				IsPrimary:     args[0] == prompt.PRIMARY,
 				Escape:        escape,
 				Force:         force,
+				Interrupted:   interrupted,
+			}
+
+			if err := applyDataFile(flags, cmd.Flags().Changed); err != nil {
+				exitcode = 666
+				fmt.Println(err.Error())
+				return
 			}
 
 			options := []cache.Option{}
@@ -113,6 +121,8 @@ func createPrintCmd() *cobra.Command {
 				fmt.Print(eng.ExtraPrompt(prompt.Secondary))
 			case prompt.TRANSIENT:
 				fmt.Print(eng.ExtraPrompt(prompt.Transient))
+			case prompt.TRANSIENT_RIGHT:
+				fmt.Print(eng.TransientRPrompt())
 			case prompt.RIGHT:
 				fmt.Print(eng.RPrompt())
 			case prompt.TOOLTIP:
@@ -147,6 +157,8 @@ func createPrintCmd() *cobra.Command {
 	printCmd.Flags().BoolVar(&saveCache, "save-cache", false, "save updated cache to file")
 	printCmd.Flags().BoolVar(&escape, "escape", true, "escape the ANSI sequences for the shell")
 	printCmd.Flags().BoolVarP(&force, "force", "f", false, "force rendering the segments")
+	printCmd.Flags().StringVar(&dataPath, "data", "", "path to a template data file (json/yaml/toml) to render with")
+	printCmd.Flags().BoolVar(&interrupted, "interrupted", false, "the command was interrupted")
 
 	// Hide flags that are for internal use only.
 	_ = printCmd.Flags().MarkHidden("save-cache")

@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// IsConnected checks if we can connect to ohmyposh within 200ms
-// If we can connect, we are connected; otherwise, let's consider being offline
-func IsConnected() bool {
+// Exposed as a var so it can be replaced in tests.
+var IsConnected = func() bool {
 	timeout := 200 * time.Millisecond
 	dialer := &net.Dialer{
 		Timeout: timeout,

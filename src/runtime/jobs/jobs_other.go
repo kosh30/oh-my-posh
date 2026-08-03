@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !js
 
 package jobs
 
@@ -18,14 +18,15 @@ var (
 func CreateJobForGoroutine(_ string) error { return nil }
 func AssignPidToGoroutineJob(_ int) error  { return nil }
 
-// setProcessGroup ensures the child process runs in its own process group so
-// it can be killed with a group kill (negative pid).
+// No-op on non-Windows platforms, since there is no Job object to release. Exists so callers
+// (e.g. config.Segment.Execute) can unconditionally defer the close without platform-specific branching.
+func CloseGoroutineJob() {}
+
+// Runs the child in its own process group so it can be killed with a group kill (negative pid).
 func SetProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// registerProcessWithGID keeps track of a started child process for the
-// given goroutine id.
 func RegisterProcess(pid int) {
 	gid := CurrentGID()
 	processesMu.Lock()
@@ -50,9 +51,6 @@ func UnregisterProcess(pid int) {
 	processesMu.Unlock()
 }
 
-// KillGoroutineChildren attempts to kill all child processes started by the
-// goroutine identified by gid using process groups (PGID). This mirrors the
-// previous behavior performed in runtime/cmd.
 func KillGoroutineChildren(gid uint64) error {
 	processesMu.Lock()
 	pidsMap, ok := processes[gid]

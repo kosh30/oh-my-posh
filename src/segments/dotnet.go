@@ -14,7 +14,6 @@ type globalJSON struct {
 }
 
 const (
-	// FetchSDKVersion fetches the SDK version in global.json
 	FetchSDKVersion options.Option = "fetch_sdk_version"
 )
 
@@ -44,14 +43,15 @@ func (d *Dotnet) Enabled() bool {
 		"global.json",
 	}
 	d.tooling = map[string]*cmd{
-		"dotnet": {
-			executable: "dotnet",
-			args:       []string{"--version"},
+		dotnetToolName: {
+			executable: dotnetToolName,
+			args:       []string{versionFlagArg},
+			envs:       []string{"DOTNET_CLI_TELEMETRY_OPTOUT=1"},
 			regex: `(?P<version>((?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)` +
 				`(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?))`,
 		},
 	}
-	d.defaultTooling = []string{"dotnet"}
+	d.defaultTooling = []string{dotnetToolName}
 	d.versionURLTemplate = "https://github.com/dotnet/core/blob/main/release-notes/{{ .Major }}.{{ .Minor }}/{{ .Major }}.{{ .Minor }}.{{ substr 0 1 .Patch }}/{{ .Major }}.{{ .Minor }}.{{ substr 0 1 .Patch }}.md" //nolint: lll
 
 	enabled := d.Language.Enabled()

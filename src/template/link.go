@@ -6,7 +6,6 @@ import (
 	"slices"
 )
 
-// url builds a hyperlink if url is not empty, otherwise returns the text only
 func url(text, url string) (string, error) {
 	unsupported := []string{elvish, xonsh}
 	if slices.Contains(unsupported, shell) {
@@ -29,5 +28,7 @@ func filePath(text, path string) (string, error) {
 		return text, nil
 	}
 
-	return fmt.Sprintf("<LINK>file:%s<TEXT>%s</TEXT></LINK>", path, text), nil
+	encodedPath := (&link.URL{Path: path}).EscapedPath()
+
+	return fmt.Sprintf("<LINK>file:%s<TEXT>%s</TEXT></LINK>", encodedPath, text), nil
 }

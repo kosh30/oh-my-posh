@@ -7,14 +7,15 @@ import (
 	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/cache"
+	"github.com/jandedobbeleer/oh-my-posh/src/cli/dsc"
+	"github.com/jandedobbeleer/oh-my-posh/src/cmdflag"
+	"github.com/jandedobbeleer/oh-my-posh/src/cmdtree"
 	"github.com/jandedobbeleer/oh-my-posh/src/config"
 	"github.com/jandedobbeleer/oh-my-posh/src/log"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/runtime/path"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
 	"github.com/jandedobbeleer/oh-my-posh/src/template"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 		"nu",
 		"elvish",
 		"xonsh",
+		"yash",
 	}
 
 	initCmd = createInitCmd()
@@ -41,16 +43,16 @@ func init() {
 	RootCmd.AddCommand(initCmd)
 }
 
-func createInitCmd() *cobra.Command {
-	initCmd := &cobra.Command{
-		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu|elvish|xonsh]",
+func createInitCmd() *cmdtree.Command {
+	initCmd := &cmdtree.Command{
+		Use:   "init [bash|zsh|fish|powershell|pwsh|cmd|nu|elvish|xonsh|yash]",
 		Short: "Initialize your shell and config",
 		Long: `Initialize your shell and config.
 
 See the documentation to initialize your shell: https://ohmyposh.dev/docs/installation/prompt.`,
 		ValidArgs: supportedShells,
 		Args:      NoArgsOrOneValidArg,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cmdtree.Command, args []string) {
 			if len(args) == 0 {
 				_ = cmd.Help()
 				return
@@ -61,7 +63,7 @@ See the documentation to initialize your shell: https://ohmyposh.dev/docs/instal
 	}
 
 	initCmd.Flags().BoolVarP(&printOutput, "print", "p", false, "print the init script")
-	initCmd.Flags().BoolVarP(&strict, "strict", "s", false, "run in strict mode")
+	initCmd.Flags().BoolVarP(&strict, "strict", "s", false, "resolve the executable through PATH")
 	initCmd.Flags().BoolVar(&debug, "debug", false, "enable/disable debug mode")
 	initCmd.Flags().BoolVar(&eval, "eval", false, "output the full init script for eval")
 
@@ -126,9 +128,9 @@ func runInit(sh, command string) {
 		output = shell.Init(env, feats)
 	}
 
-	shellDSC := shell.DSC()
+	shellDSC := dsc.ShellDSC()
 	shellDSC.Load()
-	shellDSC.Add(&shell.Shell{
+	shellDSC.Add(&dsc.Shell{
 		Command: command,
 		Name:    sh,
 	})
@@ -141,7 +143,7 @@ func runInit(sh, command string) {
 	fmt.Print(output)
 }
 
-func getFullCommand(cmd *cobra.Command, args []string) string {
+func getFullCommand(cmd *cmdtree.Command, args []string) string {
 	// Start with the command path
 	cmdPath := cmd.CommandPath()
 
@@ -151,7 +153,7 @@ func getFullCommand(cmd *cobra.Command, args []string) string {
 	}
 
 	// Add flags that were actually set
-	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+	cmd.Flags().VisitAll(func(flag *cmdflag.Flag) {
 		if !flag.Changed {
 			return
 		}

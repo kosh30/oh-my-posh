@@ -368,6 +368,10 @@ func TestGetConsoleTitleIfGethostnameReturnsError(t *testing.T) {
 }
 
 func TestShouldFill(t *testing.T) {
+	// terminal.Plain is a package-level global. Restore it so the tests that run
+	// after this one are not silently switched into plain mode.
+	t.Cleanup(func() { terminal.Plain = false })
+
 	cases := []struct {
 		Case           string
 		Overflow       config.Overflow
@@ -471,7 +475,7 @@ func TestShouldFill(t *testing.T) {
 		terminal.Plain = true
 		terminal.Colors = &color.Defaults{}
 
-		gotFiller, gotBool := engine.shouldFill(tc.Block.Filler, tc.Padding)
+		gotFiller, _, gotBool := engine.shouldFill(tc.Block.Filler, tc.Padding)
 
 		assert.Equal(t, tc.ExpectedFiller, gotFiller, tc.Case)
 		assert.Equal(t, tc.ExpectedBool, gotBool, tc.Case)

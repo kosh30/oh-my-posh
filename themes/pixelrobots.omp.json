@@ -9,6 +9,7 @@
           "foreground": "#000000",
           "leading_diamond": "\ue0c7\u2593",
           "style": "diamond",
+          "template": "  ",
           "type": "text"
         },
         {
@@ -30,6 +31,7 @@
           "type": "az"
         },
         {
+          "alias": "azpwsh",
           "background": "#012456",
           "foreground": "#FFFFFF",
           "powerline_symbol": "\ue0b0",
@@ -131,6 +133,7 @@
           "foreground": "#fafafa",
           "style": "diamond",
           "trailing_diamond": "\ue0b0",
+          "template": "  ",
           "type": "text"
         }
       ],

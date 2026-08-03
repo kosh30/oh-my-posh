@@ -128,3 +128,25 @@ func FindStringMatch(pattern, text string, index int) (string, bool) {
 
 	return match, true
 }
+
+// Returns byte offsets rather than the matched text so callers can splice at
+// the match's actual position instead of searching for the text elsewhere in
+// the string.
+func FindStringMatchIndex(pattern, text string, index int) (start, end int, ok bool) {
+	re, err := GetCompiledRegex(pattern)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	matches := re.FindStringSubmatchIndex(text)
+	if len(matches) <= 2*index+1 {
+		return 0, 0, false
+	}
+
+	start, end = matches[2*index], matches[2*index+1]
+	if start == -1 || end == -1 {
+		return 0, 0, false
+	}
+
+	return start, end, true
+}

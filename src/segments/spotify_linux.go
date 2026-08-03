@@ -3,9 +3,22 @@
 package segments
 
 import (
+	"strconv"
 	"strings"
 
+	"github.com/jandedobbeleer/oh-my-posh/src/runtime"
 	"github.com/jandedobbeleer/oh-my-posh/src/shell"
+)
+
+const (
+	spotifyDBusCommand = "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify " +
+		"/org/mpris/MediaPlayer2 org.freedesktop.DBus.Properties.Get string:org.mpris.MediaPlayer2.Player"
+	spotifyPlaybackStatusCommand = " string:PlaybackStatus | awk -F '\"' '/string/ {print tolower($2)}'"
+	spotifyArtistCommand         = " string:Metadata | awk -F '\"' 'BEGIN {RS=\"entry\"}; /'xesam:artist'/ {a=$4} END {print a}'"
+	spotifyTrackCommand          = " string:Metadata | awk -F '\"' 'BEGIN {RS=\"entry\"}; /'xesam:title'/ {t=$4} END {print t}'"
+	spotifyAlbumCommand          = " string:Metadata | awk -F '\"' 'BEGIN {RS=\"entry\"}; /'xesam:album'/ {a=$4} END {print a}'"
+	spotifyTrackNumberCommand    = " string:Metadata | awk 'BEGIN {RS=\"entry\"}; /'xesam:trackNumber'/ " +
+		"{for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+$/) n=$i} END {print n}'"
 )
 
 func (s *Spotify) Enabled() bool {
@@ -15,7 +28,7 @@ func (s *Spotify) Enabled() bool {
 	}
 
 	// Standard Linux implementation
-	running := s.runLinuxScriptCommand(" string:PlaybackStatus | awk -F '\"' '/string/ {print tolower($2)}'")
+	running := s.runLinuxScriptCommand(spotifyPlaybackStatusCommand)
 
 	if strings.HasPrefix(running, "Error") || running == "" {
 		return false
@@ -25,57 +38,32 @@ func (s *Spotify) Enabled() bool {
 		s.Status = stopped
 		return false
 	}
-
-	if running == stopped {
-		s.Status = stopped
-		return false
+	if running != playing && running != paused {
+		return s.applyMediaInfo(&runtime.MediaInfo{Status: running})
 	}
 
-	s.Status = running
-	s.Artist = s.runLinuxScriptCommand(" string:Metadata | awk -F '\"' 'BEGIN {RS=\"entry\"}; /'xesam:artist'/ {a=$4} END {print a}'")
-	s.Track = s.runLinuxScriptCommand(" string:Metadata | awk -F '\"' 'BEGIN {RS=\"entry\"}; /'xesam:title'/ {t=$4} END {print t}'")
-	s.resolveIcon()
+	artist := s.runLinuxScriptCommand(spotifyArtistCommand)
+	track := s.runLinuxScriptCommand(spotifyTrackCommand)
+	album := s.runLinuxScriptCommand(spotifyAlbumCommand)
+	trackNumberOutput := s.runLinuxScriptCommand(spotifyTrackNumberCommand)
+	trackNumber, _ := strconv.Atoi(trackNumberOutput)
 
-	return true
+	return s.applyMediaInfo(&runtime.MediaInfo{
+		Status:      running,
+		Artist:      artist,
+		Title:       track,
+		Album:       album,
+		TrackNumber: trackNumber,
+	})
 }
 
 func (s *Spotify) runLinuxScriptCommand(command string) string {
-	dbusCMD := "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.freedesktop.DBus.options.Get string:org.mpris.MediaPlayer2.Player"
-	val := s.env.RunShellCommand(shell.BASH, dbusCMD+command)
+	val := s.env.RunShellCommand(shell.BASH, spotifyDBusCommand+command)
 	return val
 }
 
+// Reads the Windows host's SMTC session via WSL interop powershell.exe; the Linux
+// side sees the same data the native Windows segment does (playing/paused/stopped/ad).
 func (s *Spotify) enabledWsl() bool {
-	psCommand := `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; (Get-Process Spotify -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowTitle -ne ""} | Select-Object -First 1).MainWindowTitle` //nolint: lll
-
-	windowName, err := s.env.RunCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", psCommand)
-	if err != nil {
-		s.Status = stopped
-		return false
-	}
-
-	title := strings.TrimSpace(windowName)
-	if title == "" || !strings.Contains(title, " - ") {
-		s.Status = stopped
-		return false
-	}
-
-	artist, track, found := strings.Cut(title, " - ")
-	if !found {
-		s.Status = stopped
-		return false
-	}
-
-	s.Artist = strings.TrimSpace(artist)
-	s.Track = strings.TrimSpace(track)
-
-	if s.Artist == "" || s.Track == "" {
-		s.Status = stopped
-		return false
-	}
-
-	s.Status = playing
-	s.resolveIcon()
-
-	return true
+	return s.querySMTC()
 }

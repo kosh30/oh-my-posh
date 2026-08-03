@@ -2,7 +2,9 @@ package cache
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +18,13 @@ type store struct {
 	filePath string
 	dirty    bool
 	persist  bool
+	// locked is set when the on-disk cache file could not be opened because
+	// another process holds it (e.g. Windows sharing violation that
+	// persisted past the retry window). When true, the store operates
+	// purely in-memory for the lifetime of this process: close() must not
+	// attempt to (re)create the file, since doing so would truncate the
+	// other process's data.
+	locked bool
 }
 
 var (
@@ -37,9 +46,8 @@ func (s Store) new() *store {
 	}
 }
 
-// getStore returns the appropriate store based on the Store identifier
 func (s Store) get() *store {
-	switch s { //nolint:exhaustive
+	switch s {
 	case Device:
 		if device == nil {
 			device = s.new()
@@ -55,7 +63,6 @@ func (s Store) get() *store {
 	}
 }
 
-// Init initializes a store with the given file path
 func (s Store) init(filePath string, persist bool) {
 	defer log.Trace(time.Now(), string(s), filePath)
 
@@ -63,9 +70,20 @@ func (s Store) init(filePath string, persist bool) {
 	store.cache = maps.NewConcurrent[*Entry[any]]()
 	store.filePath = filepath.Join(Path(), filePath)
 	store.persist = persist
+	store.dirty = false
+	store.locked = false
 
 	reader, err := openFile(store.filePath)
 	if err != nil {
+		if errors.Is(err, ErrLocked) {
+			// Another process holds the file. Leave it alone: run this
+			// session purely in-memory, don't mark dirty, don't recreate
+			// on close.
+			log.Debugf("(%s) cache file is locked, running in-memory only", string(s))
+			store.locked = true
+			return
+		}
+
 		// set to dirty so we create it on close
 		log.Error(err)
 		store.dirty = true
@@ -96,36 +114,75 @@ func (s Store) init(filePath string, persist bool) {
 	}
 }
 
+// Updates the modification time if older than 1 hour, preventing stale
+// session cache files from being cleaned up while reducing steady-state
+// overhead.
+func touchSessionFile(filePath string) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return
+	}
+
+	if time.Since(info.ModTime()) <= time.Hour {
+		return
+	}
+
+	if err := os.Chtimes(filePath, time.Now(), time.Now()); err != nil {
+		log.Error(err)
+	}
+}
+
 func (s Store) close() {
 	defer log.Trace(time.Now(), string(s))
 
 	store := s.get()
-	if store == nil || !store.persist || !store.dirty {
+	if store == nil || store.locked || !store.persist || !store.dirty {
+		if s == Session && store != nil && !store.locked && store.filePath != "" {
+			touchSessionFile(store.filePath)
+		}
+
 		log.Debugf("(%s) not persisting", string(s))
 		return
 	}
 
 	cache := store.cache.ToSimple()
 
-	file, err := openFile(store.filePath)
+	file, err := openFileForWrite(store.filePath)
 	if err != nil {
+		if errors.Is(err, ErrLocked) {
+			// Became locked between init and close (e.g. another process
+			// started writing meanwhile) — do not recreate/truncate.
+			log.Debugf("(%s) cache file locked on close, skipping persist", string(s))
+			return
+		}
+
 		log.Error(err)
 		return
 	}
-
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Error(err)
-		}
-	}()
 
 	enc := gob.NewEncoder(file)
 	if err := enc.Encode(cache); err != nil {
 		log.Error(err)
 	}
+
+	if err := file.Close(); err != nil {
+		log.Error(err)
+	}
+
+	if s != Session {
+		return
+	}
+
+	// On Windows, the mmap-backed write path doesn't reliably update the
+	// file's on-disk last-write-time (per Microsoft's docs), which can lead
+	// to an actively-used session cache being mistaken for stale and swept
+	// up by cache.Clear(). Explicitly bump the mtime now that the file is
+	// closed (and the mmap unmap/flush on Windows has happened).
+	if err := os.Chtimes(store.filePath, time.Now(), time.Now()); err != nil {
+		log.Error(err)
+	}
 }
 
-// Get retrieves a typed value from the specified store
 func Get[T any](s Store, key string) (T, bool) {
 	var zero T
 	defer log.Trace(time.Now(), string(s), key)
@@ -159,7 +216,6 @@ func Get[T any](s Store, key string) (T, bool) {
 	return zero, false
 }
 
-// Set stores a typed value in the specified store
 func Set[T any](s Store, key string, value T, duration Duration) {
 	defer log.Trace(time.Now(), string(s), key)
 
@@ -185,7 +241,6 @@ func Set[T any](s Store, key string, value T, duration Duration) {
 	store.dirty = true
 }
 
-// Delete removes a key from the specified store
 func Delete(s Store, key string) {
 	defer log.Trace(time.Now(), string(s), key)
 

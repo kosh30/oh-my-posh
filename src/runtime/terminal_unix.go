@@ -1,9 +1,8 @@
-//go:build !windows
+//go:build !windows && !js
 
 package runtime
 
 import (
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -13,16 +12,14 @@ import (
 	"github.com/shirou/gopsutil/v4/host"
 	mem "github.com/shirou/gopsutil/v4/mem"
 	terminal "github.com/wayneashleyberry/terminal-dimensions"
-	"golang.org/x/sys/unix"
 )
-
-func (term *Terminal) Root() bool {
-	defer log.Trace(time.Now())
-	return os.Geteuid() == 0
-}
 
 func (term *Terminal) QueryWindowTitles(_, _ string) (string, error) {
 	return "", &NotImplemented{}
+}
+
+func (term *Terminal) QueryMediaPlayer(_ string) (*MediaInfo, error) {
+	return nil, &NotImplemented{}
 }
 
 func (term *Terminal) IsWsl() bool {
@@ -82,12 +79,6 @@ func (term *Terminal) TerminalWidth() (int, error) {
 	term.CmdFlags.TerminalWidth = int(width)
 	log.Debugf("terminal width: %d", term.CmdFlags.TerminalWidth)
 
-	// Claude CLI has a 2 character padding on both sides
-	if term.CmdFlags.Shell == "claude" {
-		log.Debug("adjusting terminal width for Claude CLI")
-		term.CmdFlags.TerminalWidth -= 4
-	}
-
 	return term.CmdFlags.TerminalWidth, err
 }
 
@@ -119,14 +110,20 @@ func (term *Terminal) Platform() string {
 func (term *Terminal) getSpecialLinuxDistros(platform string) string {
 	lsbInfo := term.FileContent("/etc/lsb-release")
 
-	if platform == "arch" && strings.Contains(strings.ToLower(lsbInfo), "manjaro") {
-		// validate for Manjaro
+	if platform == "debian" && strings.Contains(strings.ToLower(lsbInfo), "zorin") {
+		return "zorin"
+	}
+
+	if platform != "arch" {
+		return platform
+	}
+
+	if strings.Contains(strings.ToLower(lsbInfo), "manjaro") {
 		return "manjaro"
 	}
 
-	if platform == "debian" && strings.Contains(strings.ToLower(lsbInfo), "zorin") {
-		// validate for Zorin OS
-		return "zorin"
+	if strings.Contains(strings.ToLower(lsbInfo), "artix") {
+		return "artix"
 	}
 
 	return platform
@@ -157,11 +154,6 @@ func (term *Terminal) ConvertToLinuxPath(input string) string {
 		return linuxPath
 	}
 	return input
-}
-
-func (term *Terminal) DirIsWritable(input string) bool {
-	defer log.Trace(time.Now(), input)
-	return unix.Access(input, unix.W_OK) == nil
 }
 
 func (term *Terminal) Connection(_ ConnectionType) (*Connection, error) {

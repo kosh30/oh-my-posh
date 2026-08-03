@@ -2,8 +2,15 @@ package cache
 
 import (
 	"encoding/gob"
+	"errors"
 	"time"
 )
+
+// Returned when the cache file is held exclusively by another process (e.g. a
+// Windows sharing violation that persisted past the retry window). Callers
+// must operate purely in-memory for this run and not recreate/truncate the
+// file on close.
+var ErrLocked = errors.New("cache file is locked by another process")
 
 func init() {
 	gob.Register(&Entry[any]{})
@@ -11,6 +18,7 @@ func init() {
 	gob.Register(SimpleTemplate{})
 	gob.Register((*Duration)(nil))
 	gob.Register(map[string]bool{})
+	gob.Register(commandPathEntry{})
 }
 
 const (
@@ -24,6 +32,7 @@ const (
 	ENGINECACHE      = "engine_cache"
 	FONTLISTCACHE    = "font_list_cache"
 	CLAUDECACHE      = "claude_cache"
+	COPILOTCLICACHE  = "copilot_cli_cache"
 )
 
 type Entry[T any] struct {

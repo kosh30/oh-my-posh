@@ -16,15 +16,10 @@ type Node struct {
 }
 
 const (
-	// PnpmIcon illustrates PNPM is used
-	PnpmIcon options.Option = "pnpm_icon"
-	// YarnIcon illustrates Yarn is used
-	YarnIcon options.Option = "yarn_icon"
-	// NPMIcon illustrates NPM is used
-	NPMIcon options.Option = "npm_icon"
-	// BunIcon illustrates Bun is used
-	BunIcon options.Option = "bun_icon"
-	// FetchPackageManager shows if Bun, NPM, PNPM, or Yarn is used
+	PnpmIcon            options.Option = "pnpm_icon"
+	YarnIcon            options.Option = "yarn_icon"
+	NPMIcon             options.Option = "npm_icon"
+	BunIcon             options.Option = "bun_icon"
 	FetchPackageManager options.Option = "fetch_package_manager"
 )
 
@@ -33,15 +28,15 @@ func (n *Node) Template() string {
 }
 
 func (n *Node) Enabled() bool {
-	n.extensions = []string{"*.js", "*.ts", "package.json", ".nvmrc", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".vue"}
+	n.extensions = []string{"*.js", "*.ts", fileName, ".nvmrc", "pnpm-workspace.yaml", ".pnpmfile.cjs", ".vue"}
 	n.tooling = map[string]*cmd{
-		"node": {
-			executable: "node",
-			args:       []string{"--version"},
+		nodeToolName: {
+			executable: nodeToolName,
+			args:       []string{versionFlagArg},
 			regex:      `(?:v(?P<version>((?P<major>[0-9]+).(?P<minor>[0-9]+).(?P<patch>[0-9]+))))`,
 		},
 	}
-	n.defaultTooling = []string{"node"}
+	n.defaultTooling = []string{nodeToolName}
 	n.versionURLTemplate = "https://github.com/nodejs/node/blob/main/doc/changelogs/CHANGELOG_V{{ .Major }}.md#{{ .Full }}"
 	n.Language.matchesVersionFile = n.matchesVersionFile
 	n.Language.loadContext = n.loadContext
@@ -62,37 +57,37 @@ func (n *Node) loadContext() {
 	}{
 		{
 			fileName:     "pnpm-lock.yaml",
-			name:         "pnpm",
+			name:         pnpmToolName,
 			iconProperty: PnpmIcon,
 			defaultIcon:  "\ue865",
 		},
 		{
 			fileName:     "yarn.lock",
-			name:         "yarn",
+			name:         yarnToolName,
 			iconProperty: YarnIcon,
 			defaultIcon:  "\ue6a7",
 		},
 		{
 			fileName:     "bun.lockb",
-			name:         "bun",
+			name:         bunToolName,
 			iconProperty: BunIcon,
 			defaultIcon:  "\ue76f",
 		},
 		{
 			fileName:     "bun.lock",
-			name:         "bun",
+			name:         bunToolName,
 			iconProperty: BunIcon,
 			defaultIcon:  "\ue76f",
 		},
 		{
 			fileName:     "package-lock.json",
-			name:         "npm",
+			name:         npmToolName,
 			iconProperty: NPMIcon,
 			defaultIcon:  "\uE71E",
 		},
 		{
-			fileName:     "package.json",
-			name:         "npm",
+			fileName:     fileName,
+			name:         npmToolName,
 			iconProperty: NPMIcon,
 			defaultIcon:  "\uE71E",
 		},

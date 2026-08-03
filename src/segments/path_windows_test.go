@@ -421,6 +421,16 @@ var testFullAndFolderPathCases = []testFullAndFolderPathCase{
 	{Style: Full, FolderSeparatorIcon: `\`, Pwd: homeDirWindows, Expected: "~", PathSeparator: `\`, GOOS: runtime.WINDOWS},
 	{Style: Full, FolderSeparatorIcon: `\`, Pwd: homeDirWindows + "\\abc", Expected: "~\\abc", PathSeparator: `\`, GOOS: runtime.WINDOWS},
 	{Style: Full, FolderSeparatorIcon: `\`, Pwd: "C:\\Users\\posh", Expected: "C:\\Users\\posh", PathSeparator: `\`, GOOS: runtime.WINDOWS},
+
+	// A folder name containing template syntax must never execute the `cmd` function
+	// once it is spliced into pt.Path and re-rendered in setStyle(): the render uses
+	// the restricted func map, so parsing fails and pt.Path keeps its raw, unexecuted
+	// text instead.
+	{
+		Style: FolderType, FolderSeparatorIcon: `\`,
+		Pwd: homeDirWindows + "\\{{ cmd `whoami` }}", Expected: "{{ cmd `whoami` }}",
+		PathSeparator: `\`, GOOS: runtime.WINDOWS,
+	},
 }
 
 var testFullPathCustomMappedLocationsCases = []testFullPathCustomMappedLocationsCase{
@@ -452,6 +462,25 @@ var testFullPathCustomMappedLocationsCases = []testFullPathCustomMappedLocations
 		PathSeparator:   `\`,
 		Expected:        `github\project`,
 	},
+	// mapped_locations_regex_expand=true composes with the (?i) Windows/WSL case-insensitivity
+	// prefix: the pattern uses lowercase "github" while the actual path has "GitHub".
+	{
+		Pwd:                        `C:\Users\taylo\GitHub\myrepo.worktrees\feature-branch`,
+		MappedLocations:            map[string]string{`re:(.*/github/(?P<repo>.*)\.worktrees/.*)`: "/${repo}"},
+		MappedLocationsRegexExpand: true,
+		GOOS:                       runtime.WINDOWS,
+		PathSeparator:              `\`,
+		Expected:                   `\myrepo`,
+	},
+	// legacy path replaces the occurrence at the actual match position, not the first
+	// textual occurrence of the captured substring anywhere in the input.
+	{
+		Pwd:             `\home\src\project\src\deep`,
+		MappedLocations: map[string]string{`re:.*/(src)/deep`: "#"},
+		GOOS:            runtime.WINDOWS,
+		PathSeparator:   `\`,
+		Expected:        `\home\src\project\#\deep`,
+	},
 }
 
 var testSplitPathCases = []testSplitPathCase{
@@ -461,6 +490,20 @@ var testSplitPathCases = []testSplitPathCase{
 		Relative:     "a/b/c/d",
 		GOOS:         runtime.WINDOWS,
 		GitDir:       &runtime.FileInfo{IsDir: true, ParentFolder: "C:/a/b/c"},
+		GitDirFormat: "<b>%s</b>",
+		Expected: Folders{
+			{Name: "a", Path: "C:/a"},
+			{Name: "b", Path: "C:/a/b"},
+			{Name: "<b>c</b>", Path: "C:/a/b/c", Display: true},
+			{Name: "d", Path: "C:/a/b/c/d"},
+		},
+	},
+	{
+		Case:         "Home directory - linked git worktree on Windows",
+		Root:         "C:",
+		Relative:     "a/b/c/d",
+		GOOS:         runtime.WINDOWS,
+		GitDir:       &runtime.FileInfo{ParentFolder: "C:/a/b/c"},
 		GitDirFormat: "<b>%s</b>",
 		Expected: Folders{
 			{Name: "a", Path: "C:/a"},

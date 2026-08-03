@@ -16,18 +16,15 @@ type MusicPlayer struct {
 }
 
 const (
-	// PlayingIcon indicates a song is playing
 	PlayingIcon options.Option = "playing_icon"
-	// PausedIcon indicates a song is paused
-	PausedIcon options.Option = "paused_icon"
-	// StoppedIcon indicates a song is stopped
+	PausedIcon  options.Option = "paused_icon"
 	StoppedIcon options.Option = "stopped_icon"
-	// AdIcon indicates an advertisement is playing
-	AdIcon options.Option = "ad_icon"
+	AdIcon      options.Option = "ad_icon"
 
 	playing = "playing"
 	stopped = "stopped"
 	paused  = "paused"
+	ad      = "ad"
 )
 
 func (s *Spotify) Template() string {
@@ -38,10 +35,12 @@ func (s *Spotify) resolveIcon() {
 	switch s.Status {
 	case stopped:
 		// in this case, no artist or track info
-		s.Icon = s.options.String(StoppedIcon, "\uf04d ")
+		s.Icon = s.options.String(StoppedIcon, " ")
 	case paused:
-		s.Icon = s.options.String(PausedIcon, "\uf04c ")
+		s.Icon = s.options.String(PausedIcon, " ")
 	case playing:
-		s.Icon = s.options.String(PlayingIcon, "\ue602 ")
+		s.Icon = s.options.String(PlayingIcon, " ")
+	case ad:
+		s.Icon = s.options.String(AdIcon, " ")
 	}
 }

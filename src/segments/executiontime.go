@@ -3,10 +3,9 @@ package segments
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/jandedobbeleer/oh-my-posh/src/segments/options"
-	lang "golang.org/x/text/language"
-	"golang.org/x/text/message"
 )
 
 type Executiontime struct {
@@ -16,30 +15,32 @@ type Executiontime struct {
 	Ms          int64
 }
 
-// DurationStyle how to display the time
 type DurationStyle string
 
 const (
-	// ThresholdProperty represents minimum duration (milliseconds) required to enable this segment
+	// Minimum duration in milliseconds required to enable this segment
 	ThresholdProperty options.Option = "threshold"
-	// Austin milliseconds short
+	// Milliseconds short
 	Austin DurationStyle = "austin"
-	// Roundrock milliseconds long
+	// Milliseconds long
 	Roundrock DurationStyle = "roundrock"
-	// Dallas milliseconds full
+	// Milliseconds full
 	Dallas DurationStyle = "dallas"
-	// Galveston hour
+	// Hour
 	Galveston DurationStyle = "galveston"
-	// Galveston hour
+	// Hour
 	GalvestonMs DurationStyle = "galvestonms"
-	// Houston hour and milliseconds
+	// Hour and milliseconds
 	Houston DurationStyle = "houston"
-	// Amarillo seconds
+	// Seconds
 	Amarillo DurationStyle = "amarillo"
-	// Round will round the output of the format
-	Round DurationStyle = "round"
+	Round    DurationStyle = "round"
 	// Always 7 character width
 	Lucky7 = "lucky7"
+	// ISO 8601 duration format (seconds)
+	ISO8601 DurationStyle = "iso8601"
+	// ISO 8601 duration format with milliseconds
+	ISO8601Ms DurationStyle = "iso8601ms"
 
 	second           = 1000
 	minute           = 60000
@@ -87,6 +88,10 @@ func (t *Executiontime) formatDuration(style DurationStyle) string {
 		return t.formatDurationRound()
 	case Lucky7:
 		return t.formatDurationLucky7()
+	case ISO8601:
+		return t.formatDurationISO8601()
+	case ISO8601Ms:
+		return t.formatDurationISO8601Ms()
 	default:
 		return fmt.Sprintf("Style: %s is not available", style)
 	}
@@ -171,6 +176,35 @@ func (t *Executiontime) formatDurationHouston() string {
 	return result
 }
 
+// groupThousands renders n with comma thousand separators, matching what
+// x/text/message's English printer produced for %d.
+func groupThousands(n int64) string {
+	s := strconv.FormatInt(n, 10)
+
+	start := 0
+	if s[0] == '-' {
+		start = 1
+	}
+
+	if len(s)-start <= 3 {
+		return s
+	}
+
+	var sb strings.Builder
+	first := start + (len(s)-start)%3
+	if first == start {
+		first = start + 3
+	}
+
+	sb.WriteString(s[:first])
+	for i := first; i < len(s); i += 3 {
+		sb.WriteByte(',')
+		sb.WriteString(s[i : i+3])
+	}
+
+	return sb.String()
+}
+
 func (t *Executiontime) formatDurationAmarillo() string {
 	// wholeNumber represents the value to the left of the decimal point (seconds)
 	wholeNumber := t.Ms / second
@@ -178,8 +212,7 @@ func (t *Executiontime) formatDurationAmarillo() string {
 	decimalNumber := float64(t.Ms%second) / second
 
 	// format wholeNumber as a string with thousands separators
-	printer := message.NewPrinter(lang.English)
-	result := printer.Sprintf("%d", wholeNumber)
+	result := groupThousands(wholeNumber)
 
 	if decimalNumber > 0 {
 		// format decimalNumber as a string with truncated trailing zeros
@@ -272,4 +305,64 @@ func (t *Executiontime) formatDurationLucky7() string {
 	// return "   ∞   "
 	d := t.Ms / day
 	return fmt.Sprintf("%6dd", d)
+}
+
+func (t *Executiontime) formatDurationISO8601() string {
+	// ISO 8601 duration format: PT[n]H[n]M[n]S
+	// Examples: PT13M12S, PT1H30M45S
+	result := "PT"
+
+	hours := t.Ms / hour
+	minutes := (t.Ms % hour) / minute
+	seconds := float64(t.Ms%minute) / second
+
+	roundedSeconds := int64(seconds)
+	if t.Ms%second >= second/2 {
+		roundedSeconds++
+	}
+
+	// Handle potential overflow from rounding
+	if roundedSeconds >= secondsPerMinute {
+		roundedSeconds = 0
+		minutes++
+		if minutes >= minutesPerHour {
+			minutes = 0
+			hours++
+		}
+	}
+
+	if hours > 0 {
+		result += fmt.Sprintf("%dH", hours)
+	}
+	if minutes > 0 {
+		result += fmt.Sprintf("%dM", minutes)
+	}
+	if roundedSeconds > 0 || (hours == 0 && minutes == 0) {
+		result += fmt.Sprintf("%dS", roundedSeconds)
+	}
+
+	return result
+}
+
+func (t *Executiontime) formatDurationISO8601Ms() string {
+	// ISO 8601 duration format with milliseconds: PT[n]H[n]M[n]S
+	// Examples: PT13M12.1S, PT1H30M45.123S
+	result := "PT"
+
+	hours := t.Ms / hour
+	minutes := (t.Ms % hour) / minute
+	seconds := float64(t.Ms%minute) / second
+
+	if hours > 0 {
+		result += fmt.Sprintf("%dH", hours)
+	}
+	if minutes > 0 {
+		result += fmt.Sprintf("%dM", minutes)
+	}
+	if seconds > 0 || (hours == 0 && minutes == 0) {
+		secondsStr := strconv.FormatFloat(seconds, 'f', -1, 64)
+		result += fmt.Sprintf("%sS", secondsStr)
+	}
+
+	return result
 }
