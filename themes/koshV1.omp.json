@@ -23,10 +23,10 @@
         {
           "type": "session",
           "style": "diamond",
-          "powerline_symbol": "\ue0b0",
-          "template": " \uf007 {{ .UserName }}@{{ .HostName }} ",
-          "foreground": "#d6deeb",
-          "background": "#575656"
+          "foreground": "#000000",
+          "background": "#f8e45c",
+          "template": " \uf007 {{ if .SSHSession }}\ueba9{{ end }} {{ .UserName }}@{{ .HostName }} ",
+          "powerline_symbol": "\ue0b0"
         },
         {
           "type": "root",
@@ -133,14 +133,14 @@
         {
           "type": "terraform",
           "style": "diamond",
-          "powerline_symbol": "\ue0b0",
+          "foreground": "#d6deeb",
+          "background": "#234d70",
           "template": " \ue8bd {{ .WorkspaceName }} ",
+          "powerline_symbol": "\ue0b0",
           "cache": {
             "duration": "5m",
             "strategy": "folder"
-          },
-          "foreground": "#d6deeb",
-          "background": "#234d70"
+          }
         },
         {
           "type": "time",
@@ -171,7 +171,9 @@
           "type": "status",
           "style": "plain",
           "foreground": "#22da6e",
-          "foreground_templates": ["{{ if gt .Code 0 }}#ef5350{{ end }}"],
+          "foreground_templates": [
+            "{{ if gt .Code 0 }}#ef5350{{ end }}"
+          ],
           "template": "\ue285\ue285",
           "options": {
             "always_enabled": true
